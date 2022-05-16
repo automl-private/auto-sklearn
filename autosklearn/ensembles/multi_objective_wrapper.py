@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Type, Union, cast
 
+import itertools
+
 import numpy as np
 from sklearn.utils import check_random_state
 
@@ -80,10 +82,48 @@ class MultiObjectiveEnsembleWrapper(AbstractEnsemble):
     ) -> AbstractEnsemble:
         ensembles = []
         losses = []
-        all_weights = self.random_state.rand(self.n_weights - 2, len(self.metrics))
+
+        # Generating weights according to Equation (1) from Knowles, 2005
+        # https://www.cs.bham.ac.uk/~jdk/parego/emo2005parego.pdf
+        all_weights = []
+        fidelity = 20
+        num_metrics = len(self.metrics)
+        only_one_active = list(np.eye(num_metrics))
+
+        for product in itertools.product(list(range(fidelity)), repeat=num_metrics):
+            # This would set weight of all metrics to zero, not a good idea...
+            if np.sum(product) == 0:
+                continue
+            # Drop all combinations in which only one metric has a positive value,
+            # we'll add all of them later after taking a subset of all other weights
+            elif num_metrics == np.sum(np.array(product) == 0) + 1:
+                continue
+            else:
+                all_weights.append(product)
+
+        # Make each weight vector sum up to 1
+        all_weights = np.array(all_weights)
         all_weights = all_weights / np.sum(all_weights, axis=1).reshape((-1, 1))
-        all_weights = [[1.0, 0.0]] + list(all_weights) + [[0.0, 1.0]]
+
+        # Remove duplicate weight vectors
+        all_weights = list(set(tuple(weights) for weights in all_weights))
+
+        # Take a subsample of the weight vectors if we request less than generated
+        if self.n_weights < len(all_weights):
+            indices = self.random_state.choice(
+                len(all_weights),
+                replace=False,
+                size=self.n_weights - len(only_one_active),
+            )
+            all_weights = [all_weights[i] for i in indices]
+
+        # Add the weight vectors where only one metric is active to always sample that
+        all_weights = only_one_active + all_weights
+
+        # Sort such that we always start with the weight vector that assigns all
+        # weights to the first metric
         all_weights = sorted(all_weights, key=lambda x: x[0], reverse=True)
+
         for weights in all_weights:
             metric = WeightedMetricScorer(metrics=self.metrics, weights=weights)
 

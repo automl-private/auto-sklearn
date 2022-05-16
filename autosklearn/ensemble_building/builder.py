@@ -15,6 +15,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import pynisher
+from sklearn.utils.validation import check_random_state
 
 from autosklearn.automl_common.common.utils.backend import Backend
 from autosklearn.data.xy_data_manager import XYDataManager
@@ -154,7 +155,7 @@ class EnsembleBuilder:
         self.task_type = task_type
         self.memory_limit = memory_limit
         self.read_at_most = read_at_most
-        self.random_state = random_state
+        self.random_state = check_random_state(random_state)
         self.dataset_name = dataset_name
         self.ensemble_size = ensemble_size
         self.ensemble_nbest = ensemble_nbest

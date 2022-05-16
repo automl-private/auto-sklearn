@@ -8,6 +8,7 @@ import traceback
 
 import dask.distributed
 import numpy as np
+from sklearn.utils.validation import check_random_state
 from smac.callbacks import IncorporateRunResultCallback
 from smac.optimizer.smbo import SMBO
 from smac.runhistory.runhistory import RunInfo, RunValue
@@ -123,7 +124,7 @@ class EnsembleBuilderManager(IncorporateRunResultCallback):
         self.max_iterations = max_iterations
         self.read_at_most = read_at_most
         self.memory_limit = memory_limit
-        self.random_state = random_state
+        self.random_state = check_random_state(random_state)
         self.logger_port = logger_port
         self.pynisher_context = pynisher_context
 
@@ -348,6 +349,7 @@ class EnsembleBuilderManager(IncorporateRunResultCallback):
         (ensemble_history: list[dict[str, Any]], nbest: int | float)
             The ensemble history and the nbest chosen members
         """
+        random_state = check_random_state(random_state)
         result = EnsembleBuilder(
             backend=backend,
             dataset_name=dataset_name,
@@ -360,7 +362,7 @@ class EnsembleBuilderManager(IncorporateRunResultCallback):
             precision=precision,
             memory_limit=memory_limit,
             read_at_most=read_at_most,
-            random_state=random_state,
+            random_state=random_state.randint(10000000),
             logger_port=logger_port,
         ).run(
             end_at=end_at,
