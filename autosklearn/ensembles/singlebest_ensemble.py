@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import List, Sequence, Tuple, Union
+from typing import Dict, List, Sequence, Tuple, Union
 
 import os
 
@@ -32,10 +32,10 @@ class SingleBest(AbstractEnsemble):
         backend: Backend,
     ):
         self.task_type = task_type
-        if isinstance(metrics, Scorer):
-            self.metrics = [metrics]
-        elif isinstance(metrics, Sequence):
+        if isinstance(metrics, Sequence):
             self.metrics = metrics
+        elif isinstance(metrics, Scorer):
+            self.metrics = [metrics]
         else:
             raise TypeError(type(metrics))
         self.seed = seed
@@ -122,7 +122,7 @@ class SingleBest(AbstractEnsemble):
         )
 
     def get_models_with_weights(
-        self, models: BasePipeline
+        self, models: Dict[Tuple[int, int, float], BasePipeline]
     ) -> List[Tuple[float, BasePipeline]]:
         output = []
         for i, weight in enumerate(self.weights_):
