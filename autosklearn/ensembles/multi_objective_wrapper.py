@@ -86,7 +86,8 @@ class MultiObjectiveEnsembleWrapper(AbstractEnsemble):
         # Generating weights according to Equation (1) from Knowles, 2005
         # https://www.cs.bham.ac.uk/~jdk/parego/emo2005parego.pdf
         all_weights = []
-        fidelity = 20
+        # TODO increase this once we have a faster ensemble construction method
+        fidelity = 5
         num_metrics = len(self.metrics)
         only_one_active = list(np.eye(num_metrics))
 

@@ -31,8 +31,7 @@ X_train, X_test, y_train, y_test = sklearn.model_selection.train_test_split(
 # ======================================
 
 automl = autosklearn.classification.AutoSklearnClassifier(
-    time_left_for_this_task=120,
-    per_run_time_limit=30,
+    time_left_for_this_task=60,
     tmp_folder="/tmp/autosklearn_sequential_example_tmp",
     # Do not construct ensembles in parallel to avoid using more than one
     # core at a time. The ensemble will be constructed after auto-sklearn
