@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from abc import ABCMeta, abstractmethod
+from abc import ABC, abstractmethod
 from typing import Dict, List, Sequence, Tuple, Union
 
 import numpy as np
@@ -9,9 +9,7 @@ from autosklearn.metrics import Scorer
 from autosklearn.pipeline.base import BasePipeline
 
 
-class AbstractEnsemble:
-    __metaclass__ = ABCMeta
-
+class AbstractEnsemble(ABC):
     @abstractmethod
     def __init__(
         self,

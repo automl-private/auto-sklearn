@@ -70,7 +70,7 @@ class MultiObjectiveEnsembleWrapper(AbstractEnsemble):
         # in the EnsembleSelection so this should
         # be fine
         self.metrics = None  # type: ignore
-        return self.__dict__
+        return {key: value for key, value in self.__dict__.items() if key != "metrics"}
 
     def fit(
         self,
@@ -123,18 +123,22 @@ class MultiObjectiveEnsembleWrapper(AbstractEnsemble):
     def __str__(self) -> str:
         return ""
 
+    @property
+    def selected_ensemble(self) -> AbstractEnsemble:
+        return self.ensembles_[0]
+
     def get_models_with_weights(
         self, models: Dict[Tuple[int, int, float], BasePipeline]
     ) -> List[Tuple[float, BasePipeline]]:
-        return self.ensembles_[0].get_models_with_weights(models)
+        return self.selected_ensemble.get_models_with_weights(models)
 
     def get_selected_model_identifiers(self) -> List[Tuple[int, int, float]]:
-        return self.ensembles_[0].get_selected_model_identifiers()
+        return self.selected_ensemble.get_selected_model_identifiers()
 
     def get_validation_performance(self) -> float:
-        return self.ensembles_[0].get_validation_performance()
+        return self.selected_ensemble.get_validation_performance()
 
     def get_identifiers_with_weights(
         self,
     ) -> List[Tuple[Tuple[int, int, float], float]]:
-        return self.ensembles_[0].get_identifiers_with_weights()
+        return self.selected_ensemble.get_identifiers_with_weights()

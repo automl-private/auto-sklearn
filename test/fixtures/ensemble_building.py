@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
+import copy
 import math
 import pickle
 import sys
@@ -109,7 +110,7 @@ def make_ensemble_builder(
         backend: Backend | None = None,
         dataset_name: str = "TEST",
         task_type: int = BINARY_CLASSIFICATION,
-        metric: Scorer = accuracy,
+        metrics: Scorer = copy.deepcopy([accuracy]),
         **kwargs: Any,
     ) -> EnsembleBuilder:
 
@@ -117,7 +118,7 @@ def make_ensemble_builder(
             backend = automl._backend
             dataset_name = automl._dataset_name
             task_type = automl._task
-            metric = automl._metrics[0]
+            metrics = automl._metrics
             kwargs = {
                 "ensemble_size": automl._ensemble_size,
                 "ensemble_nbest": automl._ensemble_nbest,
@@ -151,7 +152,7 @@ def make_ensemble_builder(
             backend=backend,
             dataset_name=dataset_name,
             task_type=task_type,
-            metric=metric,
+            metrics=metrics,
             **kwargs,
         )
 

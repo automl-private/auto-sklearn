@@ -81,8 +81,7 @@ class EnsembleSelection(AbstractEnsemble):
         # one in __main__. we don't use the metric
         # in the EnsembleSelection so this should
         # be fine
-        self.metric = None  # type: ignore
-        return self.__dict__
+        return {key: value for key, value in self.__dict__.items() if key != "metrics"}
 
     def fit(
         self,
@@ -353,12 +352,7 @@ class EnsembleSelection(AbstractEnsemble):
     def get_identifiers_with_weights(
         self,
     ) -> List[Tuple[Tuple[int, int, float], float]]:
-        output = []
-
-        for identifier, weight in zip(self.identifiers_, self.weights_):
-            output.append((identifier, weight))
-
-        return output
+        return list(zip(self.identifiers_, self.weights_))
 
     def get_selected_model_identifiers(self) -> List[Tuple[int, int, float]]:
         output = []
