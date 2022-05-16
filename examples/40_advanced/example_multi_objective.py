@@ -14,6 +14,7 @@ future.
 """
 from pprint import pprint
 
+import matplotlib.pyplot as plt
 import numpy as np
 import sklearn.datasets
 import sklearn.metrics
@@ -40,19 +41,19 @@ X_train, X_test, y_train, y_test = sklearn.model_selection.train_test_split(
 # ==========================
 
 automl = autosklearn.classification.AutoSklearnClassifier(
-    time_left_for_this_task=120,
+    time_left_for_this_task=60,
     tmp_folder="/tmp/autosklearn_multi_objective_example_tmp",
     metric=[autosklearn.metrics.precision, autosklearn.metrics.recall],
 )
-automl.fit(X_train, y_train, dataset_name="breast_cancer")
+automl.fit(X_train, y_train, dataset_name="German Credit")
 
 ############################################################################
 # Compute the two competing metrics
 # =================================
 
 predictions = automl.predict(X_test)
-print("Precision", sklearn.metrics.precision_score(y_test.tolist(), predictions))
-print("Recall", sklearn.metrics.recall_score(y_test.tolist(), predictions))
+print("Precision", sklearn.metrics.precision_score(y_test, predictions))
+print("Recall", sklearn.metrics.recall_score(y_test, predictions))
 
 ############################################################################
 # View the models found by auto-sklearn
@@ -68,3 +69,22 @@ print(automl.leaderboard())
 # to *auto-sklearn*.
 
 pprint(automl.cv_results_)
+
+############################################################################
+# Visualize the Pareto front
+# ==========================
+plot_values = []
+pareto_front = automl.get_pareto_front()
+for ensemble in pareto_front:
+    predictions = ensemble.predict(X_test)
+    precision = sklearn.metrics.precision_score(y_test, predictions)
+    recall = sklearn.metrics.recall_score(y_test, predictions)
+    plot_values.append((precision, recall))
+fig = plt.figure()
+ax = fig.add_subplot(111)
+for precision, recall in plot_values:
+    ax.scatter(precision, recall, c="blue")
+ax.set_xlabel("Precision")
+ax.set_ylabel("Recall")
+ax.set_title("Pareto front")
+plt.show()

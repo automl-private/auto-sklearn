@@ -13,6 +13,7 @@ import platform
 import sys
 import tempfile
 import time
+import types
 import uuid
 import warnings
 
@@ -30,7 +31,7 @@ from dask.distributed import Client, LocalCluster
 from scipy.sparse import spmatrix
 from sklearn.base import BaseEstimator
 from sklearn.dummy import DummyClassifier, DummyRegressor
-from sklearn.ensemble import VotingRegressor
+from sklearn.ensemble import VotingClassifier, VotingRegressor
 from sklearn.metrics._classification import type_of_target
 from sklearn.model_selection._split import (
     BaseCrossValidator,
@@ -63,6 +64,7 @@ from autosklearn.data.validation import (
 )
 from autosklearn.data.xy_data_manager import XYDataManager
 from autosklearn.ensemble_building import EnsembleBuilderManager
+from autosklearn.ensembles.multi_objective_wrapper import MultiObjectiveEnsembleWrapper
 from autosklearn.ensembles.singlebest_ensemble import SingleBest
 from autosklearn.evaluation import ExecuteTaFuncWithQueue, get_cost_of_crash
 from autosklearn.evaluation.abstract_evaluator import _fit_and_suppress_warnings
@@ -1624,6 +1626,94 @@ class AutoML(BaseEstimator):
             )
         )
         return ensemble
+
+    def _load_pareto_front(self) -> Sequence[VotingClassifier | VotingRegressor]:
+        if len(self._metrics) <= 1:
+            raise ValueError("Pareto front is only available for two or more metrics.")
+
+        if self._ensemble_size > 0:
+            self.ensemble_ = self._backend.load_ensemble(self._seed)
+        else:
+            self.ensemble_ = None
+
+        # If no ensemble is loaded we cannot do anything
+        if not self.ensemble_:
+            raise ValueError(
+                "Pareto front can only be accessed if an ensemble is available."
+            )
+
+        elif not isinstance(self.ensemble_, MultiObjectiveEnsembleWrapper):
+            raise ValueError(
+                "Can only retrieve a Pareto front from a multi-objective ensemble "
+                "builder."
+            )
+
+        else:
+            ensembles = []
+            for ensemble in self.ensemble_.get_pareto_front():
+                identifiers = ensemble.get_selected_model_identifiers()
+                weights = {
+                    identifier: weight
+                    for identifier, weight in ensemble.get_identifiers_with_weights()
+                }
+
+                if self._task in CLASSIFICATION_TASKS:
+                    voter = VotingClassifier(
+                        estimators=None,
+                        voting="soft",
+                    )
+                else:
+                    voter = VotingRegressor(estimators=None)
+
+                if self._resampling_strategy in ("cv", "cv-iterative-fit"):
+                    models = self._backend.load_cv_models_by_identifiers(identifiers)
+                else:
+                    models = self._backend.load_models_by_identifiers(identifiers)
+
+                if len(models) == 0:
+                    raise ValueError("No models fitted!")
+
+                weight_vector = []
+                estimators = []
+                for identifier in identifiers:
+                    weight_vector.append(weights[identifier])
+                    estimators.append(models[identifier])
+
+                voter.estimators = estimators
+                voter.estimators_ = estimators
+                voter.weights = weight_vector
+
+                if self._task in CLASSIFICATION_TASKS:
+                    # Scikit-learn would raise a shape error here which we
+                    # have to work around...
+
+                    def inverse_transform(self, y):
+                        if len(y.shape) == 1:
+                            y = y.reshape((-1, 1))
+                            reshaped = True
+                        else:
+                            reshaped = False
+                        y = self.old_inverse_transform(y)
+                        # Not sure why scikit-learn transforms to type object...
+                        try:
+                            y = y.astype(float)
+                        except:  # noqa: E722
+                            pass
+                        if reshaped:
+                            return y.flatten()
+                        else:
+                            return y
+
+                    voter.le_ = copy.deepcopy(
+                        self.InputValidator.target_validator.encoder
+                    )
+                    functype = types.MethodType
+                    voter.le_.old_inverse_transform = voter.le_.inverse_transform
+                    voter.le_.inverse_transform = functype(inverse_transform, voter.le_)
+
+                ensembles.append(voter)
+
+            return ensembles
 
     def score(self, X, y):
         # fix: Consider only index 1 of second dimension

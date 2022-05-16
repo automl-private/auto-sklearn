@@ -10,6 +10,7 @@ import pandas as pd
 from ConfigSpace.configuration_space import Configuration, ConfigurationSpace
 from scipy.sparse import spmatrix
 from sklearn.base import BaseEstimator, ClassifierMixin, RegressorMixin
+from sklearn.ensemble import VotingClassifier, VotingRegressor
 from sklearn.utils.multiclass import type_of_target
 from smac.runhistory.runhistory import RunInfo, RunValue
 from typing_extensions import Literal
@@ -1182,6 +1183,9 @@ class AutoSklearnEstimator(BaseEstimator):
             if self.automl_.configuration_space is None
             else self.automl_.configuration_space
         )
+
+    def get_pareto_front(self) -> Sequence[VotingClassifier | VotingRegressor]:
+        return self.automl_._load_pareto_front()
 
 
 class AutoSklearnClassifier(AutoSklearnEstimator, ClassifierMixin):

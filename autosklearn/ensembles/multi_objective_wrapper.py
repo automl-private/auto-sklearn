@@ -182,3 +182,6 @@ class MultiObjectiveEnsembleWrapper(AbstractEnsemble):
         self,
     ) -> List[Tuple[Tuple[int, int, float], float]]:
         return self.selected_ensemble.get_identifiers_with_weights()
+
+    def get_pareto_front(self) -> Sequence[AbstractEnsemble]:
+        return self.ensembles_
