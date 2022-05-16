@@ -451,7 +451,7 @@ class AutoML(BaseEstimator):
         ta = ExecuteTaFuncWithQueue(
             backend=self._backend,
             autosklearn_seed=self._seed,
-            multi_objectives=["cost"],
+            multi_objectives=[metric.name for metric in self._metrics],
             resampling_strategy=self._resampling_strategy,
             initial_num_run=dummy_run_num,
             stats=stats,
