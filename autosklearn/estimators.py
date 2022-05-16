@@ -517,11 +517,11 @@ class AutoSklearnEstimator(BaseEstimator):
     def fit_ensemble(
         self,
         y,
-        task=None,
-        precision=32,
-        dataset_name=None,
-        ensemble_nbest=None,
-        ensemble_size=None,
+        task: int = None,
+        precision: Literal[16, 21, 64] = 32,
+        dataset_name: Optional[str] = None,
+        ensemble_nbest: Optional[int] = None,
+        ensemble_size: Optional[int] = None,
     ):
         """Fit an ensemble to models trained during an optimization process.
 
@@ -538,9 +538,9 @@ class AutoSklearnEstimator(BaseEstimator):
             the task type (binary classification, multiclass classification,
             multilabel classification or regression).
 
-        precision : str
+        precision : int
             Numeric precision used when loading ensemble data. Can be either
-            ``'16'``, ``'32'`` or ``'64'``.
+            ``16``, ``32`` or ``64``.
 
         dataset_name : str
             Name of the current data set.
