@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Sequence
 
 import logging.handlers
 import time
@@ -25,7 +25,7 @@ class EnsembleBuilderManager(IncorporateRunResultCallback):
         backend: Backend,
         dataset_name: str,
         task: int,
-        metric: Scorer,
+        metrics: Sequence[Scorer],
         time_left_for_ensembles: float = np.inf,
         max_iterations: int | None = None,
         pynisher_context: str = "fork",
@@ -53,8 +53,8 @@ class EnsembleBuilderManager(IncorporateRunResultCallback):
         task: int
             Type of ML task
 
-        metric: Scorer
-            Metric to compute the loss of the given predictions
+        metrics: Sequence[Scorer]
+            Metrics to optimize the ensemble for
 
         time_left_for_ensemble: float = np.inf
             How much time is left for the task in seconds.
@@ -114,7 +114,7 @@ class EnsembleBuilderManager(IncorporateRunResultCallback):
         self.backend = backend
         self.dataset_name = dataset_name
         self.task = task
-        self.metric = metric
+        self.metrics = metrics
         self.ensemble_size = ensemble_size
         self.ensemble_nbest = ensemble_nbest
         self.max_models_on_disc = max_models_on_disc
@@ -223,7 +223,7 @@ class EnsembleBuilderManager(IncorporateRunResultCallback):
                         backend=self.backend,
                         dataset_name=self.dataset_name,
                         task_type=self.task,
-                        metric=self.metric,
+                        metrics=self.metrics,
                         ensemble_size=self.ensemble_size,
                         ensemble_nbest=self.ensemble_nbest,
                         max_models_on_disc=self.max_models_on_disc,
@@ -263,7 +263,7 @@ class EnsembleBuilderManager(IncorporateRunResultCallback):
         backend: Backend,
         dataset_name: str,
         task_type: int,
-        metric: Scorer,
+        metrics: Sequence[Scorer],
         pynisher_context: str,
         ensemble_size: int = 50,
         ensemble_nbest: int | float = 50,
@@ -297,8 +297,8 @@ class EnsembleBuilderManager(IncorporateRunResultCallback):
         task_type: int
             type of ML task
 
-        metric: Scorer
-            Metric to compute the loss of the given predictions
+        metrics: Sequence[Scorer]
+            Metrics to optimize the ensemble for.
 
         pynisher_context: "fork" | "spawn" | "forkserver" = "fork"
             Context to use for multiprocessing, can be either fork, spawn or forkserver.
@@ -352,7 +352,7 @@ class EnsembleBuilderManager(IncorporateRunResultCallback):
             backend=backend,
             dataset_name=dataset_name,
             task_type=task_type,
-            metric=metric,
+            metrics=metrics,
             ensemble_size=ensemble_size,
             ensemble_nbest=ensemble_nbest,
             max_models_on_disc=max_models_on_disc,

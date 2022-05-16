@@ -19,7 +19,9 @@ import pynisher
 from autosklearn.automl_common.common.utils.backend import Backend
 from autosklearn.data.xy_data_manager import XYDataManager
 from autosklearn.ensemble_building.run import Run, RunID
+from autosklearn.ensembles.abstract_ensemble import AbstractEnsemble
 from autosklearn.ensembles.ensemble_selection import EnsembleSelection
+from autosklearn.ensembles.multi_objective_wrapper import MultiObjectiveEnsembleWrapper
 from autosklearn.metrics import Scorer, calculate_losses, calculate_scores
 from autosklearn.util.disk import rmtree
 from autosklearn.util.functional import cut, findwhere, split
@@ -41,7 +43,7 @@ class EnsembleBuilder:
         backend: Backend,
         dataset_name: str,
         task_type: int,
-        metric: Scorer,
+        metrics: Sequence[Scorer],
         ensemble_size: int = 50,
         ensemble_nbest: int | float = 50,
         max_models_on_disc: int | float | None = 100,
@@ -65,8 +67,8 @@ class EnsembleBuilder:
         task_type: int
             type of ML task
 
-        metric: str
-            name of metric to compute the loss of the given predictions
+        metrics: Sequence[Scorer]
+            Metrics to optimize the ensemble for.
 
         ensemble_size: int = 50
             maximal size of ensemble (passed to autosklearn.ensemble.ensemble_selection)
@@ -146,7 +148,7 @@ class EnsembleBuilder:
             self.logger.debug(f"Using behaviour when {t} for {ensemble_nbest}:{t}")
 
         self.seed = seed
-        self.metric = metric
+        self.metrics = metrics
         self.backend = backend
         self.precision = precision
         self.task_type = task_type
@@ -528,7 +530,7 @@ class EnsembleBuilder:
             targets=targets,
             size=self.ensemble_size,
             task=self.task_type,
-            metric=self.metric,
+            metrics=self.metrics,
             precision=self.precision,
             random_state=self.random_state,
         )
@@ -557,14 +559,16 @@ class EnsembleBuilder:
             run_preds = [r.predictions(kind, precision=self.precision) for r in models]
             pred = ensemble.predict(run_preds)
 
-            score = calculate_scores(
+            scores = calculate_scores(
                 solution=pred_targets,
                 prediction=pred,
                 task_type=self.task_type,
-                metrics=[self.metric],
+                metrics=self.metrics,
                 scoring_functions=None,
-            )[self.metric.name]
-            performance_stamp[f"ensemble_{score_name}_score"] = score
+            )
+            performance_stamp[f"ensemble_{score_name}_score"] = scores[
+                self.metrics[0].name
+            ]
             self.ensemble_history.append(performance_stamp)
 
         # Lastly, delete any runs that need to be deleted. We save this as the last step
@@ -745,10 +749,10 @@ class EnsembleBuilder:
         *,
         size: int | None = None,
         task: int | None = None,
-        metric: Scorer | None = None,
+        metrics: Sequence[Scorer] | None = None,
         precision: int | None = None,
         random_state: int | np.random.RandomState | None = None,
-    ) -> EnsembleSelection:
+    ) -> AbstractEnsemble:
         """Fit an ensemble from the provided runs.
 
         Note
@@ -769,8 +773,8 @@ class EnsembleBuilder:
         task: int | None = None
             The kind of task performed
 
-        metric: Scorer | None = None
-            The metric to use when comparing run predictions to the targets
+        metrics: Sequence[Scorer] | None = None
+            Metrics to optimize the ensemble for.
 
         precision: int | None = None
             The precision with which to load run predictions
@@ -780,20 +784,31 @@ class EnsembleBuilder:
 
         Returns
         -------
-        ensemble: EnsembleSelection
-            The trained ensemble
+        AbstractEnsemble
         """
         task = task if task is not None else self.task_type
         size = size if size is not None else self.ensemble_size
-        metric = metric if metric is not None else self.metric
+        metrics = metrics if metrics is not None else self.metrics
         rs = random_state if random_state is not None else self.random_state
 
-        ensemble = EnsembleSelection(
-            ensemble_size=size,
-            task_type=task,
-            metric=metric,
-            random_state=rs,
-        )
+        if len(metrics) == 1:
+            ensemble = EnsembleSelection(
+                ensemble_size=size,
+                task_type=task,
+                metrics=metrics,
+                random_state=rs,
+            )  # type: AbstractEnsemble
+        else:
+            ensemble = MultiObjectiveEnsembleWrapper(
+                metrics=metrics,
+                task_type=task,
+                random_state=random_state,
+                ensemble_class=EnsembleSelection,
+                ensemble_kwargs={
+                    "ensemble_size": size,
+                    "random_state": rs,
+                },
+            )
 
         self.logger.debug(f"Fitting ensemble on {len(runs)} models")
         start_time = time.time()
@@ -804,9 +819,9 @@ class EnsembleBuilder:
         ]
 
         ensemble.fit(
-            predictions=predictions_train,
-            labels=targets,
-            identifiers=[run.id for run in runs],
+            base_models_predictions=predictions_train,
+            true_targets=targets,
+            model_identifiers=[run.id for run in runs],
         )
 
         duration = time.time() - start_time
@@ -899,8 +914,8 @@ class EnsembleBuilder:
                 solution=targets,
                 prediction=predictions,
                 task_type=self.task_type,
-                metrics=[self.metric],
-            )[self.metric.name]
+                metrics=self.metrics,
+            )[self.metrics[0].name]
         except Exception as e:
             self.logger.error(f"Error getting loss {run}:{e}{traceback.format_exc()}")
             loss = np.inf

@@ -1,18 +1,29 @@
+from __future__ import annotations
+
 from abc import ABCMeta, abstractmethod
-from typing import Dict, List, Tuple, Union
+from typing import Dict, List, Sequence, Tuple, Union
 
 import numpy as np
 
+from autosklearn.metrics import Scorer
 from autosklearn.pipeline.base import BasePipeline
 
 
-class AbstractEnsemble(object):
+class AbstractEnsemble:
     __metaclass__ = ABCMeta
+
+    @abstractmethod
+    def __init__(
+        self,
+        task_type: int,
+        metrics: Sequence[Scorer] | Scorer,
+    ):
+        pass
 
     @abstractmethod
     def fit(
         self,
-        base_models_predictions: np.ndarray,
+        base_models_predictions: np.ndarray | List[np.ndarray],
         true_targets: np.ndarray,
         model_identifiers: List[Tuple[int, int, float]],
     ) -> "AbstractEnsemble":
@@ -27,6 +38,9 @@ class AbstractEnsemble(object):
             shape = (n_base_models, n_data_points, n_targets)
             n_targets is the number of classes in case of classification,
             n_targets is 0 or 1 in case of regression
+
+            Can be a list of 2d numpy arrays as well to prevent copying all
+            predictions into a single, large numpy array.
 
         true_targets : array of shape [n_targets]
 
@@ -59,8 +73,10 @@ class AbstractEnsemble(object):
         pass
 
     @abstractmethod
-    def get_models_with_weights(self, models: Dict) -> List[Tuple[float, BasePipeline]]:
-        """Return a list of (weight, model) pairs
+    def get_models_with_weights(
+        self, models: Dict[Tuple[int, int, float], BasePipeline]
+    ) -> List[Tuple[float, BasePipeline]]:
+        """Return a list of (weight, model) pairs for all models included in the ensemble.
 
         Parameters
         ----------
@@ -71,6 +87,24 @@ class AbstractEnsemble(object):
         Returns
         -------
         array : [(weight_1, model_1), ..., (weight_n, model_n)]
+        """
+
+    @abstractmethod
+    def get_identifiers_with_weights(
+        self,
+    ) -> List[Tuple[Tuple[int, int, float], float]]:
+        """Return a (identifier, weight)-pairs for all models that were passed to the
+        ensemble builder.
+
+        Parameters
+        ----------
+        models : dict {identifier : model object}
+            The identifiers are the same as the one presented to the fit()
+            method. Models can be used for nice printing.
+
+        Returns
+        -------
+        array : [(identifier_1, weight_1), ..., (identifier_n, weight_n)]
         """
 
     @abstractmethod

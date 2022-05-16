@@ -1,4 +1,6 @@
-from typing import List, Tuple, Union
+from __future__ import annotations
+
+from typing import List, Sequence, Tuple, Union
 
 import os
 
@@ -23,12 +25,19 @@ class SingleBest(AbstractEnsemble):
 
     def __init__(
         self,
-        metric: Scorer,
+        task_type: int,
+        metrics: Sequence[Scorer] | Scorer,
         run_history: RunHistory,
         seed: int,
         backend: Backend,
     ):
-        self.metric = metric
+        self.task_type = task_type
+        if isinstance(metrics, Scorer):
+            self.metrics = [metrics]
+        elif isinstance(metrics, Sequence):
+            self.metrics = metrics
+        else:
+            raise TypeError(type(metrics))
         self.seed = seed
         self.backend = backend
 
@@ -45,14 +54,19 @@ class SingleBest(AbstractEnsemble):
         the actual model.
         """
         best_model_identifier = []
-        best_model_score = self.metric._worst_possible_result
+        best_model_score = self.metrics[0]._worst_possible_result
 
         for run_key in self.run_history.data.keys():
             run_value = self.run_history.data[run_key]
-            score = self.metric._optimum - (self.metric._sign * run_value.cost)
+            print(run_key, run_value)
+            if len(self.metrics) == 1:
+                cost = run_value.cost
+            else:
+                cost = run_value.cost[0]
+            score = self.metrics[0]._optimum - (self.metrics[0]._sign * cost)
 
-            if (score > best_model_score and self.metric._sign > 0) or (
-                score < best_model_score and self.metric._sign < 0
+            if (score > best_model_score and self.metrics[0]._sign > 0) or (
+                score < best_model_score and self.metrics[0]._sign < 0
             ):
 
                 # Make sure that the individual best model actually exists

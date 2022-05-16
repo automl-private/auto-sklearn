@@ -804,7 +804,7 @@ class AutoML(BaseEstimator):
                     backend=copy.deepcopy(self._backend),
                     dataset_name=dataset_name,
                     task=self._task,
-                    metric=self._metrics[0],
+                    metrics=self._metrics,
                     ensemble_size=self._ensemble_size,
                     ensemble_nbest=self._ensemble_nbest,
                     max_models_on_disc=self._max_models_on_disc,
@@ -1523,7 +1523,7 @@ class AutoML(BaseEstimator):
             backend=copy.deepcopy(self._backend),
             dataset_name=dataset_name if dataset_name else self._dataset_name,
             task=task if task else self._task,
-            metric=self._metrics[0],
+            metric=self._metrics,
             ensemble_size=ensemble_size if ensemble_size else self._ensemble_size,
             ensemble_nbest=ensemble_nbest if ensemble_nbest else self._ensemble_nbest,
             max_models_on_disc=self._max_models_on_disc,
@@ -1611,7 +1611,8 @@ class AutoML(BaseEstimator):
 
         # SingleBest contains the best model found by AutoML
         ensemble = SingleBest(
-            metric=self._metrics[0],
+            metrics=self._metrics,
+            task_type=self._task,
             seed=self._seed,
             run_history=self.runhistory_,
             backend=self._backend,
@@ -1619,7 +1620,7 @@ class AutoML(BaseEstimator):
         self._logger.warning(
             "No valid ensemble was created. Please check the log"
             "file for errors. Default to the best individual estimator:{}".format(
-                ensemble.identifiers_
+                ensemble.get_identifiers_with_weights()[0][0]
             )
         )
         return ensemble
@@ -2029,8 +2030,7 @@ class AutoML(BaseEstimator):
                 "No model found. Try increasing 'time_left_for_this_task'."
             )
 
-        for i, weight in enumerate(self.ensemble_.weights_):
-            (_, model_id, _) = self.ensemble_.identifiers_[i]
+        for (_, model_id, _), weight in self.ensemble_.get_identifiers_with_weights():
             table_dict[model_id]["ensemble_weight"] = weight
 
         table = pd.DataFrame.from_dict(table_dict, orient="index")

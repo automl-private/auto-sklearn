@@ -395,8 +395,11 @@ def test_cv_results_multi_objective(tmp_dir):
         tmp_folder=os.path.join(tmp_dir, "backend"),
         seed=1,
         initial_configurations_via_metalearning=0,
-        metric=[autosklearn.metrics.precision_macro, autosklearn.metrics.roc_auc],
-        scoring_functions=[autosklearn.metrics.accuracy, autosklearn.metrics.roc_auc],
+        metric=[autosklearn.metrics.precision_macro, autosklearn.metrics.recall_macro],
+        scoring_functions=[
+            autosklearn.metrics.accuracy,
+            autosklearn.metrics.balanced_accuracy,
+        ],
     )
 
     params = cls.get_params()
@@ -410,11 +413,11 @@ def test_cv_results_multi_objective(tmp_dir):
     assert "rank_test_scores" not in cv_results
     for expected_column in (
         "mean_test_precision_macro",
-        "mean_test_roc_auc",
+        "mean_test_recall_macro",
         "mean_fit_time",
         "rank_test_precision_macro",
-        "rank_test_roc_auc",
-        "metric_roc_auc",
+        "rank_test_recall_macro",
+        "metric_balanced_accuracy",
         "metric_accuracy",
     ):
         assert isinstance(cv_results[expected_column], np.ndarray), type(

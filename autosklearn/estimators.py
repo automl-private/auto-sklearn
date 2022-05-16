@@ -964,13 +964,11 @@ class AutoSklearnEstimator(BaseEstimator):
             )
 
         # Get the models ensemble weight if it has one
-        # TODO both implementing classes of AbstractEnsemble have a property
-        #      `identifiers_` and `weights_`, might be good to put it as an
-        #       abstract property
-        # TODO `ensemble_.identifiers_` and `ensemble_.weights_` are loosely
-        #      tied together by ordering, might be better to store as tuple
-        for i, weight in enumerate(self.automl_.ensemble_.weights_):
-            (_, model_id, _) = self.automl_.ensemble_.identifiers_[i]
+        for (
+            _,
+            model_id,
+            _,
+        ), weight in self.automl_.ensemble_.get_identifiers_with_weights():
 
             # We had issues where the model's in the ensembles are not in the runhistory
             # collected. I have no clue why this is but to prevent failures, we fill
