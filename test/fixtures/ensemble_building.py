@@ -120,7 +120,8 @@ def make_ensemble_builder(
             task_type = automl._task
             metrics = automl._metrics
             kwargs = {
-                "ensemble_size": automl._ensemble_size,
+                "ensemble_class": automl._ensemble_class,
+                "ensemble_kwargs": automl._ensemble_kwargs,
                 "ensemble_nbest": automl._ensemble_nbest,
                 "max_models_on_disc": automl._max_models_on_disc,
                 "precision": automl.precision,
