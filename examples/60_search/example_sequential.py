@@ -20,6 +20,7 @@ import autosklearn.classification
 ############################################################################
 # Data Loading
 # ======================================
+from autosklearn.ensembles.ensemble_selection import EnsembleSelection
 
 X, y = sklearn.datasets.load_breast_cancer(return_X_y=True)
 X_train, X_test, y_train, y_test = sklearn.model_selection.train_test_split(
@@ -36,14 +37,14 @@ automl = autosklearn.classification.AutoSklearnClassifier(
     # Do not construct ensembles in parallel to avoid using more than one
     # core at a time. The ensemble will be constructed after auto-sklearn
     # finished fitting all machine learning models.
-    ensemble_size=0,
+    ensemble_class=None,
     delete_tmp_folder_after_terminate=False,
 )
 automl.fit(X_train, y_train, dataset_name="breast_cancer")
 
 # This call to fit_ensemble uses all models trained in the previous call
 # to fit to build an ensemble which can be used with automl.predict()
-automl.fit_ensemble(y_train, ensemble_size=50)
+automl.fit_ensemble(y_train, ensemble_class=EnsembleSelection)
 
 ############################################################################
 # Print the final ensemble constructed by auto-sklearn

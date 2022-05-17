@@ -1,3 +1,11 @@
+# -*- encoding: utf-8 -*-
+"""
+===============
+Custom Ensemble
+===============
+
+This example shows how to provide a custom ensemble to Auto-sklearn.
+"""
 from __future__ import annotations
 
 import itertools
