@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Iterable, Sequence, cast
+from typing import Any, Dict, Iterable, Sequence, Type, cast
 
 import logging.handlers
 import multiprocessing
@@ -45,7 +45,8 @@ class EnsembleBuilder:
         dataset_name: str,
         task_type: int,
         metrics: Sequence[Scorer],
-        ensemble_size: int = 50,
+        ensemble_class: Type[AbstractEnsemble] = EnsembleSelection,
+        ensemble_kwargs: Dict[str, Any] | None = None,
         ensemble_nbest: int | float = 50,
         max_models_on_disc: int | float | None = 100,
         performance_range_threshold: float = 0,
@@ -71,8 +72,9 @@ class EnsembleBuilder:
         metrics: Sequence[Scorer]
             Metrics to optimize the ensemble for.
 
-        ensemble_size: int = 50
-            maximal size of ensemble (passed to autosklearn.ensemble.ensemble_selection)
+        ensemble_class
+
+        ensemble_kwargs
 
         ensemble_nbest: int | float = 50
 
@@ -157,7 +159,8 @@ class EnsembleBuilder:
         self.read_at_most = read_at_most
         self.random_state = check_random_state(random_state)
         self.dataset_name = dataset_name
-        self.ensemble_size = ensemble_size
+        self.ensemble_class = ensemble_class
+        self.ensemble_kwargs = ensemble_kwargs
         self.ensemble_nbest = ensemble_nbest
         self.performance_range_threshold = performance_range_threshold
 
@@ -529,7 +532,8 @@ class EnsembleBuilder:
         ensemble = self.fit_ensemble(
             candidates,
             targets=targets,
-            size=self.ensemble_size,
+            ensemble_class=self.ensemble_class,
+            ensemble_kwargs=self.ensemble_kwargs,
             task=self.task_type,
             metrics=self.metrics,
             precision=self.precision,
@@ -748,7 +752,8 @@ class EnsembleBuilder:
         runs: list[Run],
         targets: np.ndarray,
         *,
-        size: int | None = None,
+        ensemble_class: Type[AbstractEnsemble] = EnsembleSelection,
+        ensemble_kwargs: Dict[str, Any] | None = None,
         task: int | None = None,
         metrics: Sequence[Scorer] | None = None,
         precision: int | None = None,
@@ -788,27 +793,30 @@ class EnsembleBuilder:
         AbstractEnsemble
         """
         task = task if task is not None else self.task_type
-        size = size if size is not None else self.ensemble_size
+        ensemble_class = (
+            ensemble_class if ensemble_class is not None else self.ensemble_class
+        )
+        ensemble_kwargs = (
+            ensemble_kwargs if ensemble_kwargs is not None else self.ensemble_kwargs
+        )
+        ensemble_kwargs = ensemble_kwargs if ensemble_kwargs is not None else {}
         metrics = metrics if metrics is not None else self.metrics
         rs = random_state if random_state is not None else self.random_state
 
         if len(metrics) == 1:
-            ensemble = EnsembleSelection(
-                ensemble_size=size,
+            ensemble = ensemble_class(
                 task_type=task,
                 metrics=metrics,
                 random_state=rs,
+                **ensemble_kwargs,
             )  # type: AbstractEnsemble
         else:
             ensemble = MultiObjectiveEnsembleWrapper(
                 metrics=metrics,
                 task_type=task,
                 random_state=random_state,
-                ensemble_class=EnsembleSelection,
-                ensemble_kwargs={
-                    "ensemble_size": size,
-                    "random_state": rs,
-                },
+                ensemble_class=ensemble_class,
+                ensemble_kwargs=ensemble_kwargs,
             )
 
         self.logger.debug(f"Fitting ensemble on {len(runs)} models")

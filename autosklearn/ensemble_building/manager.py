@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Sequence
+from typing import Any, Dict, Sequence, Type
 
 import logging.handlers
 import time
@@ -16,6 +16,8 @@ from smac.tae.base import StatusType
 
 from autosklearn.automl_common.common.utils.backend import Backend
 from autosklearn.ensemble_building.builder import EnsembleBuilder
+from autosklearn.ensembles.abstract_ensemble import AbstractEnsemble
+from autosklearn.ensembles.ensemble_selection import EnsembleSelection
 from autosklearn.metrics import Scorer
 from autosklearn.util.logging_ import get_named_client_logger
 
@@ -30,7 +32,8 @@ class EnsembleBuilderManager(IncorporateRunResultCallback):
         time_left_for_ensembles: float = np.inf,
         max_iterations: int | None = None,
         pynisher_context: str = "fork",
-        ensemble_size: int = 50,
+        ensemble_class: Type[AbstractEnsemble] = EnsembleSelection,
+        ensemble_kwargs: Dict[str, Any] | None = None,
         ensemble_nbest: int | float = 50,
         max_models_on_disc: int | float | None = None,
         seed: int = 1,
@@ -68,8 +71,9 @@ class EnsembleBuilderManager(IncorporateRunResultCallback):
         pynisher_context: "spawn" | "fork" | "forkserver" = "fork"
             The multiprocessing context for pynisher.
 
-        ensemble_size: int = 50
-            maximal size of ensemble
+        ensemble_class
+
+        ensemble_kwargs
 
         ensemble_nbest: int | float = 50
             If int: consider only the n best prediction
@@ -116,7 +120,8 @@ class EnsembleBuilderManager(IncorporateRunResultCallback):
         self.dataset_name = dataset_name
         self.task = task
         self.metrics = metrics
-        self.ensemble_size = ensemble_size
+        self.ensemble_class = ensemble_class
+        self.ensemble_kwargs = ensemble_kwargs
         self.ensemble_nbest = ensemble_nbest
         self.max_models_on_disc = max_models_on_disc
         self.seed = seed
@@ -225,7 +230,8 @@ class EnsembleBuilderManager(IncorporateRunResultCallback):
                         dataset_name=self.dataset_name,
                         task_type=self.task,
                         metrics=self.metrics,
-                        ensemble_size=self.ensemble_size,
+                        ensemble_class=self.ensemble_class,
+                        ensemble_kwargs=self.ensemble_kwargs,
                         ensemble_nbest=self.ensemble_nbest,
                         max_models_on_disc=self.max_models_on_disc,
                         seed=self.seed,
@@ -266,7 +272,8 @@ class EnsembleBuilderManager(IncorporateRunResultCallback):
         task_type: int,
         metrics: Sequence[Scorer],
         pynisher_context: str,
-        ensemble_size: int = 50,
+        ensemble_class: Type[AbstractEnsemble] = EnsembleSelection,
+        ensemble_kwargs: Dict[str, Any] | None = None,
         ensemble_nbest: int | float = 50,
         max_models_on_disc: int | float | None = None,
         seed: int = 1,
@@ -304,8 +311,9 @@ class EnsembleBuilderManager(IncorporateRunResultCallback):
         pynisher_context: "fork" | "spawn" | "forkserver" = "fork"
             Context to use for multiprocessing, can be either fork, spawn or forkserver.
 
-        ensemble_size: int = 50
-            Maximal size of ensemble
+        ensemble_class
+
+        ensemble_kwargs
 
         ensemble_nbest: int | float = 50
             If int: consider only the n best prediction
@@ -355,7 +363,8 @@ class EnsembleBuilderManager(IncorporateRunResultCallback):
             dataset_name=dataset_name,
             task_type=task_type,
             metrics=metrics,
-            ensemble_size=ensemble_size,
+            ensemble_class=ensemble_class,
+            ensemble_kwargs=ensemble_kwargs,
             ensemble_nbest=ensemble_nbest,
             max_models_on_disc=max_models_on_disc,
             seed=seed,

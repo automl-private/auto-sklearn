@@ -223,7 +223,7 @@ def case_classifier_fitted_no_ensemble(
             model = make_automl_classifier(
                 temporary_directory=cache.path("backend"),
                 delete_tmp_folder_after_terminate=False,
-                ensemble_size=0,
+                ensemble_class=None,
             )
 
             X, y, Xt, yt = make_sklearn_dataset(name=dataset)

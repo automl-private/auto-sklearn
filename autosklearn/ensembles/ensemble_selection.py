@@ -18,12 +18,12 @@ from autosklearn.pipeline.base import BasePipeline
 class EnsembleSelection(AbstractEnsemble):
     def __init__(
         self,
-        ensemble_size: int,
         task_type: int,
         metrics: Sequence[Scorer] | Scorer,
+        random_state: Optional[Union[int, np.random.RandomState]] = None,
+        ensemble_size: int = 50,
         bagging: bool = False,
         mode: str = "fast",
-        random_state: Optional[Union[int, np.random.RandomState]] = None,
     ) -> None:
         """An ensemble of selected algorithms
 

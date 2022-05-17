@@ -129,7 +129,10 @@ class MultiObjectiveEnsembleWrapper(AbstractEnsemble):
             metric = WeightedMetricScorer(metrics=self.metrics, weights=weights)
 
             ensemble = self.ensemble_class(
-                task_type=self.task_type, metrics=metric, **self.ensemble_kwargs
+                task_type=self.task_type,
+                metrics=metric,
+                random_state=self.random_state,
+                **self.ensemble_kwargs,
             )
             ensemble.fit(
                 base_models_predictions=base_models_predictions,

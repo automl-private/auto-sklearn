@@ -1,7 +1,18 @@
 # -*- encoding: utf-8 -*-
 from __future__ import annotations
 
-from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple, Union
+from typing import (
+    Any,
+    Dict,
+    Iterable,
+    List,
+    Mapping,
+    Optional,
+    Sequence,
+    Tuple,
+    Type,
+    Union,
+)
 
 import dask.distributed
 import joblib
@@ -21,6 +32,8 @@ from autosklearn.data.validation import (
     SUPPORTED_TARGET_TYPES,
     convert_if_sparse,
 )
+from autosklearn.ensembles.abstract_ensemble import AbstractEnsemble
+from autosklearn.ensembles.ensemble_selection import EnsembleSelection
 from autosklearn.metrics import Scorer
 from autosklearn.pipeline.base import BasePipeline
 
@@ -31,7 +44,8 @@ class AutoSklearnEstimator(BaseEstimator):
         time_left_for_this_task=3600,
         per_run_time_limit=None,
         initial_configurations_via_metalearning=25,
-        ensemble_size: int = 50,
+        ensemble_class: Type[AbstractEnsemble] | None = EnsembleSelection,
+        ensemble_kwargs: Dict[str, Any] | None = None,
         ensemble_nbest=50,
         max_models_on_disc=50,
         seed=1,
@@ -77,11 +91,9 @@ class AutoSklearnEstimator(BaseEstimator):
             datasets. Disable if the hyperparameter optimization algorithm
             should start from scratch.
 
-        ensemble_size : int, optional (default=50)
-            Number of models added to the ensemble built by *Ensemble
-            selection from libraries of models*. Models are drawn with
-            replacement. If set to ``0`` no ensemble is fit and the single
-            best model is loaded.
+        ensemble_class
+
+        ensemble_kwargs
 
         ensemble_nbest : int, optional (default=50)
             Only consider the ``ensemble_nbest`` models when building an
@@ -353,7 +365,8 @@ class AutoSklearnEstimator(BaseEstimator):
         self.initial_configurations_via_metalearning = (
             initial_configurations_via_metalearning
         )
-        self.ensemble_size = ensemble_size
+        self.ensemble_class = ensemble_class
+        self.ensemble_kwargs = ensemble_kwargs
         self.ensemble_nbest = ensemble_nbest
         self.max_models_on_disc = max_models_on_disc
         self.seed = seed
@@ -405,7 +418,8 @@ class AutoSklearnEstimator(BaseEstimator):
             time_left_for_this_task=self.time_left_for_this_task,
             per_run_time_limit=self.per_run_time_limit,
             initial_configurations_via_metalearning=initial_configs,
-            ensemble_size=self.ensemble_size,
+            ensemble_class=self.ensemble_class,
+            ensemble_kwargs=self.ensemble_kwargs,
             ensemble_nbest=self.ensemble_nbest,
             max_models_on_disc=self.max_models_on_disc,
             seed=self.seed,
@@ -521,7 +535,8 @@ class AutoSklearnEstimator(BaseEstimator):
         precision: Literal[16, 21, 64] = 32,
         dataset_name: Optional[str] = None,
         ensemble_nbest: Optional[int] = None,
-        ensemble_size: Optional[int] = None,
+        ensemble_class: Optional[AbstractEnsemble] = EnsembleSelection,
+        ensemble_kwargs: Optional[Dict[str, Any]] = None,
     ):
         """Fit an ensemble to models trained during an optimization process.
 
@@ -550,8 +565,9 @@ class AutoSklearnEstimator(BaseEstimator):
             building. This is inspired by a concept called library pruning
             introduced in `Getting Most out of Ensemble Selection`.
 
-        ensemble_size : int
-            Size of the ensemble built by `Ensemble Selection`.
+        ensemble_class
+
+        ensemble_kwargs
 
         Returns
         -------
@@ -569,7 +585,8 @@ class AutoSklearnEstimator(BaseEstimator):
             precision=precision,
             dataset_name=dataset_name,
             ensemble_nbest=ensemble_nbest,
-            ensemble_size=ensemble_size,
+            ensemble_class=ensemble_class,
+            ensemble_kwargs=ensemble_kwargs,
         )
         return self
 
@@ -1195,7 +1212,7 @@ class AutoSklearnClassifier(AutoSklearnEstimator, ClassifierMixin):
         """Fit *auto-sklearn* to given training set (X, y).
 
         Fit both optimizes the machine learning models and builds an ensemble
-        out of them. To disable ensembling, set ``ensemble_size==0``.
+        out of them.
 
         Parameters
         ----------
@@ -1329,7 +1346,7 @@ class AutoSklearnRegressor(AutoSklearnEstimator, RegressorMixin):
         """Fit *Auto-sklearn* to given training set (X, y).
 
         Fit both optimizes the machine learning models and builds an ensemble
-        out of them. To disable ensembling, set ``ensemble_size==0``.
+        out of them.
 
         Parameters
         ----------
