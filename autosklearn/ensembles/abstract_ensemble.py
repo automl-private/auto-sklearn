@@ -15,6 +15,7 @@ class AbstractEnsemble(ABC):
         self,
         task_type: int,
         metrics: Sequence[Scorer] | Scorer,
+        random_state: int | np.random.RandomState | None,
     ):
         pass
 
