@@ -74,9 +74,11 @@ from autosklearn.data.validation import (
 )
 from autosklearn.data.xy_data_manager import XYDataManager
 from autosklearn.ensemble_building import EnsembleBuilderManager
-from autosklearn.ensembles.abstract_ensemble import AbstractEnsemble
+from autosklearn.ensembles.abstract_ensemble import (
+    AbstractEnsemble,
+    AbstractMultiObjectiveEnsemble,
+)
 from autosklearn.ensembles.ensemble_selection import EnsembleSelection
-from autosklearn.ensembles.multi_objective_wrapper import MultiObjectiveEnsembleWrapper
 from autosklearn.ensembles.singlebest_ensemble import SingleBest
 from autosklearn.evaluation import ExecuteTaFuncWithQueue, get_cost_of_crash
 from autosklearn.evaluation.abstract_evaluator import _fit_and_suppress_warnings
@@ -1660,36 +1662,23 @@ class AutoML(BaseEstimator):
         # If no ensemble is loaded we cannot do anything
         if not self.ensemble_:
 
-            # Temporary debugging code
-
-            ensemble_dir = self._backend.get_ensemble_dir()
-
-            if not os.path.exists(ensemble_dir):
-                if self._logger is not None:
-                    self._logger.warning("Directory %s does not exist" % ensemble_dir)
-                else:
-                    warnings.warn("Directory %s does not exist" % ensemble_dir)
-
-            indices_files = os.listdir(ensemble_dir)
-            indices_files = [os.path.join(ensemble_dir, f) for f in indices_files]
-            indices_files.sort(key=lambda f: time.ctime(os.path.getmtime(f)))
-
-            model_files = self._backend.list_all_models(self._seed)
-
             raise ValueError(
-                "Pareto front can only be accessed if an ensemble is available. "
-                "Found only %s at %s, models %s, rh %s"
-                % (indices_files, ensemble_dir, model_files, self.runhistory_)
+                "Pareto front can only be accessed if an ensemble is available."
             )
 
-        elif not isinstance(self.ensemble_, MultiObjectiveEnsembleWrapper):
-            raise ValueError(
-                "Can only retrieve a Pareto front from a multi-objective ensemble "
-                "builder."
+        if isinstance(self.ensemble_, AbstractMultiObjectiveEnsemble):
+            pareto_front = self.ensemble_.get_pareto_front()
+        else:
+            self._logger.warning(
+                "Pareto front not available for single objective ensemble "
+                "method. The Pareto front will only include the single ensemble "
+                "constructed by %s",
+                type(self.ensemble_),
             )
+            pareto_front = [self.ensemble_]
 
         ensembles = []
-        for ensemble in self.ensemble_.get_pareto_front():
+        for ensemble in pareto_front:
             identifiers = ensemble.get_selected_model_identifiers()
             weights = {
                 identifier: weight

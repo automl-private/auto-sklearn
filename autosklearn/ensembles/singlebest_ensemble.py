@@ -47,6 +47,14 @@ class SingleBest(AbstractEnsemble):
         self.run_history = run_history
         self.identifiers_ = self.get_identifiers_from_run_history()
 
+    def fit(
+        self,
+        base_models_predictions: np.ndarray | List[np.ndarray],
+        true_targets: np.ndarray,
+        model_identifiers: List[Tuple[int, int, float]],
+    ) -> "AbstractEnsemble":
+        return self
+
     def get_identifiers_from_run_history(self) -> List[Tuple[int, int, float]]:
         """Parses the run history, to identify the best performing model
 
@@ -99,6 +107,8 @@ class SingleBest(AbstractEnsemble):
                 " fit a valid model. Please check the log file for errors."
             )
 
+        self.best_model_score_ = best_model_score
+
         return best_model_identifier
 
     def predict(self, predictions: Union[np.ndarray, List[np.ndarray]]) -> np.ndarray:
@@ -144,3 +154,6 @@ class SingleBest(AbstractEnsemble):
                 output.append(identifier)
 
         return output
+
+    def get_validation_performance(self) -> float:
+        return self.best_model_score_

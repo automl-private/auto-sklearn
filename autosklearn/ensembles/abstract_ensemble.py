@@ -125,3 +125,8 @@ class AbstractEnsemble(ABC):
         ------
         float
         """
+
+
+class AbstractMultiObjectiveEnsemble(AbstractEnsemble):
+    def get_pareto_front(self) -> Sequence[AbstractEnsemble]:
+        pass

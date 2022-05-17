@@ -22,7 +22,6 @@ from autosklearn.data.xy_data_manager import XYDataManager
 from autosklearn.ensemble_building.run import Run, RunID
 from autosklearn.ensembles.abstract_ensemble import AbstractEnsemble
 from autosklearn.ensembles.ensemble_selection import EnsembleSelection
-from autosklearn.ensembles.multi_objective_wrapper import MultiObjectiveEnsembleWrapper
 from autosklearn.metrics import Scorer, calculate_losses, calculate_scores
 from autosklearn.util.disk import rmtree
 from autosklearn.util.functional import cut, findwhere, split
@@ -803,21 +802,12 @@ class EnsembleBuilder:
         metrics = metrics if metrics is not None else self.metrics
         rs = random_state if random_state is not None else self.random_state
 
-        if len(metrics) == 1:
-            ensemble = ensemble_class(
-                task_type=task,
-                metrics=metrics,
-                random_state=rs,
-                **ensemble_kwargs,
-            )  # type: AbstractEnsemble
-        else:
-            ensemble = MultiObjectiveEnsembleWrapper(
-                metrics=metrics,
-                task_type=task,
-                random_state=random_state,
-                ensemble_class=ensemble_class,
-                ensemble_kwargs=ensemble_kwargs,
-            )
+        ensemble = ensemble_class(
+            task_type=task,
+            metrics=metrics,
+            random_state=rs,
+            **ensemble_kwargs,
+        )  # type: AbstractEnsemble
 
         self.logger.debug(f"Fitting ensemble on {len(runs)} models")
         start_time = time.time()
