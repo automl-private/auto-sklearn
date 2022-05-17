@@ -1638,8 +1638,34 @@ class AutoML(BaseEstimator):
 
         # If no ensemble is loaded we cannot do anything
         if not self.ensemble_:
+
+            # Temporary debugging code
+
+            ensemble_dir = self._backend.get_ensemble_dir()
+
+            if not os.path.exists(ensemble_dir):
+                if self._logger is not None:
+                    self._logger.warning("Directory %s does not exist" % ensemble_dir)
+                else:
+                    warnings.warn("Directory %s does not exist" % ensemble_dir)
+
+            import glob
+
+            if self._seed >= 0:
+                indices_files = glob.glob(
+                    os.path.join(
+                        glob.escape(ensemble_dir), "%s.*.ensemble" % self._seed
+                    )
+                )
+                indices_files.sort()
+            else:
+                indices_files = os.listdir(ensemble_dir)
+                indices_files = [os.path.join(ensemble_dir, f) for f in indices_files]
+                indices_files.sort(key=lambda f: time.ctime(os.path.getmtime(f)))
+
             raise ValueError(
-                "Pareto front can only be accessed if an ensemble is available."
+                "Pareto front can only be accessed if an ensemble is available. "
+                "Found only %s at %s" % (indices_files, ensemble_dir)
             )
 
         elif not isinstance(self.ensemble_, MultiObjectiveEnsembleWrapper):
@@ -1648,72 +1674,64 @@ class AutoML(BaseEstimator):
                 "builder."
             )
 
-        else:
-            ensembles = []
-            for ensemble in self.ensemble_.get_pareto_front():
-                identifiers = ensemble.get_selected_model_identifiers()
-                weights = {
-                    identifier: weight
-                    for identifier, weight in ensemble.get_identifiers_with_weights()
-                }
+        ensembles = []
+        for ensemble in self.ensemble_.get_pareto_front():
+            identifiers = ensemble.get_selected_model_identifiers()
+            weights = {
+                identifier: weight
+                for identifier, weight in ensemble.get_identifiers_with_weights()
+            }
 
-                if self._task in CLASSIFICATION_TASKS:
-                    voter = VotingClassifier(
-                        estimators=None,
-                        voting="soft",
-                    )
-                else:
-                    voter = VotingRegressor(estimators=None)
+            if self._task in CLASSIFICATION_TASKS:
+                voter = VotingClassifier(
+                    estimators=None,
+                    voting="soft",
+                )
+            else:
+                voter = VotingRegressor(estimators=None)
 
-                if self._resampling_strategy in ("cv", "cv-iterative-fit"):
-                    models = self._backend.load_cv_models_by_identifiers(identifiers)
-                else:
-                    models = self._backend.load_models_by_identifiers(identifiers)
+            if self._resampling_strategy in ("cv", "cv-iterative-fit"):
+                models = self._backend.load_cv_models_by_identifiers(identifiers)
+            else:
+                models = self._backend.load_models_by_identifiers(identifiers)
 
-                if len(models) == 0:
-                    raise ValueError("No models fitted!")
+            if len(models) == 0:
+                raise ValueError("No models fitted!")
 
-                weight_vector = []
-                estimators = []
-                for identifier in identifiers:
-                    weight_vector.append(weights[identifier])
-                    estimators.append(models[identifier])
+            weight_vector = []
+            estimators = []
+            for identifier in identifiers:
+                weight_vector.append(weights[identifier])
+                estimators.append(models[identifier])
 
-                voter.estimators = estimators
-                voter.estimators_ = estimators
-                voter.weights = weight_vector
+            voter.estimators = estimators
+            voter.estimators_ = estimators
+            voter.weights = weight_vector
 
-                if self._task in CLASSIFICATION_TASKS:
-                    # Scikit-learn would raise a shape error here which we
-                    # have to work around...
+            if self._task in CLASSIFICATION_TASKS:
+                # Scikit-learn would raise a shape error here which we
+                # have to work around...
 
-                    def inverse_transform(self, y):
-                        if len(y.shape) == 1:
-                            y = y.reshape((-1, 1))
-                            reshaped = True
-                        else:
-                            reshaped = False
-                        y = self.old_inverse_transform(y)
-                        # Not sure why scikit-learn transforms to type object...
-                        try:
-                            y = y.astype(float)
-                        except:  # noqa: E722
-                            pass
-                        if reshaped:
-                            return y.flatten()
-                        else:
-                            return y
+                def inverse_transform(self, y):
+                    if len(y.shape) == 1:
+                        y = y.reshape((-1, 1))
+                        reshaped = True
+                    else:
+                        reshaped = False
+                    y = self.old_inverse_transform(y)
+                    if reshaped:
+                        return y.flatten()
+                    else:
+                        return y
 
-                    voter.le_ = copy.deepcopy(
-                        self.InputValidator.target_validator.encoder
-                    )
-                    functype = types.MethodType
-                    voter.le_.old_inverse_transform = voter.le_.inverse_transform
-                    voter.le_.inverse_transform = functype(inverse_transform, voter.le_)
+                voter.le_ = copy.deepcopy(self.InputValidator.target_validator.encoder)
+                functype = types.MethodType
+                voter.le_.old_inverse_transform = voter.le_.inverse_transform
+                voter.le_.inverse_transform = functype(inverse_transform, voter.le_)
 
-                ensembles.append(voter)
+            ensembles.append(voter)
 
-            return ensembles
+        return ensembles
 
     def score(self, X, y):
         # fix: Consider only index 1 of second dimension
