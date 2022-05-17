@@ -16,7 +16,7 @@ def testEnsembleSelection():
         ensemble_size=10,
         task_type=REGRESSION,
         random_state=0,
-        metric=root_mean_squared_error,
+        metrics=[root_mean_squared_error],
     )
 
     # We create a problem such that we encourage the addition of members to the ensemble
@@ -93,7 +93,7 @@ def testPredict():
         ensemble_size=3,
         task_type=BINARY_CLASSIFICATION,
         random_state=0,
-        metric=accuracy,
+        metrics=[accuracy],
     )
     # Test for case 1. Create (3, 2, 2) predictions.
     per_model_pred = np.array(
