@@ -1649,23 +1649,16 @@ class AutoML(BaseEstimator):
                 else:
                     warnings.warn("Directory %s does not exist" % ensemble_dir)
 
-            import glob
+            indices_files = os.listdir(ensemble_dir)
+            indices_files = [os.path.join(ensemble_dir, f) for f in indices_files]
+            indices_files.sort(key=lambda f: time.ctime(os.path.getmtime(f)))
 
-            if self._seed >= 0:
-                indices_files = glob.glob(
-                    os.path.join(
-                        glob.escape(ensemble_dir), "%s.*.ensemble" % self._seed
-                    )
-                )
-                indices_files.sort()
-            else:
-                indices_files = os.listdir(ensemble_dir)
-                indices_files = [os.path.join(ensemble_dir, f) for f in indices_files]
-                indices_files.sort(key=lambda f: time.ctime(os.path.getmtime(f)))
+            model_files = self._backend.list_all_models(self._seed)
 
             raise ValueError(
                 "Pareto front can only be accessed if an ensemble is available. "
-                "Found only %s at %s" % (indices_files, ensemble_dir)
+                "Found only %s at %s, models %s, rh %s"
+                % (indices_files, ensemble_dir, model_files, self.runhistory_)
             )
 
         elif not isinstance(self.ensemble_, MultiObjectiveEnsembleWrapper):

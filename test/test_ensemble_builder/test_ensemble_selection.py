@@ -28,7 +28,7 @@ def testEnsembleSelection():
         pred[i * 5 : 5 * (i + 1)] = 5.5 * i
         predictions.append(pred)
 
-    ensemble.fit(predictions, y_true, identifiers=[(i, i, i) for i in range(20)])
+    ensemble.fit(predictions, y_true, model_identifiers=[(i, i, i) for i in range(20)])
 
     np.testing.assert_array_equal(
         ensemble.weights_,
