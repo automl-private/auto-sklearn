@@ -5,6 +5,7 @@ from typing import Dict, List, Sequence, Tuple, Union
 
 import numpy as np
 
+from autosklearn.automl_common.common.utils.backend import Backend
 from autosklearn.metrics import Scorer
 from autosklearn.pipeline.base import BasePipeline
 
@@ -16,6 +17,7 @@ class AbstractEnsemble(ABC):
         task_type: int,
         metrics: Sequence[Scorer] | Scorer,
         random_state: int | np.random.RandomState | None,
+        backend: Backend,
     ):
         pass
 

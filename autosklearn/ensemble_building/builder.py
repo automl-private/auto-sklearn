@@ -806,6 +806,7 @@ class EnsembleBuilder:
             task_type=task,
             metrics=metrics,
             random_state=rs,
+            backend=self.backend,
             **ensemble_kwargs,
         )  # type: AbstractEnsemble
 

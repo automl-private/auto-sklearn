@@ -9,6 +9,7 @@ from collections import Counter
 import numpy as np
 from sklearn.utils import check_random_state
 
+from autosklearn.automl_common.common.utils.backend import Backend
 from autosklearn.constants import TASK_TYPES
 from autosklearn.ensembles.abstract_ensemble import AbstractEnsemble
 from autosklearn.metrics import Scorer, calculate_losses
@@ -20,7 +21,8 @@ class EnsembleSelection(AbstractEnsemble):
         self,
         task_type: int,
         metrics: Sequence[Scorer] | Scorer,
-        random_state: Optional[Union[int, np.random.RandomState]] = None,
+        random_state: Optional[Union[int, np.random.RandomState]],
+        backend: Backend,
         ensemble_size: int = 50,
         bagging: bool = False,
         mode: str = "fast",

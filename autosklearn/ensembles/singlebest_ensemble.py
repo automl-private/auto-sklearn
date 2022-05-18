@@ -27,9 +27,10 @@ class SingleBest(AbstractEnsemble):
         self,
         task_type: int,
         metrics: Sequence[Scorer] | Scorer,
+        random_state: int | np.random.RandomState | None,
+        backend: Backend,
         run_history: RunHistory,
         seed: int,
-        backend: Backend,
     ):
         self.task_type = task_type
         if isinstance(metrics, Sequence):
