@@ -7,7 +7,7 @@ from autosklearn.metrics import accuracy, root_mean_squared_error
 import pytest
 
 
-def testEnsembleSelection():
+def testEnsembleSelection(backend):
     """
     Makes sure ensemble selection fit method creates an ensemble correctly
     """
@@ -16,6 +16,7 @@ def testEnsembleSelection():
         ensemble_size=10,
         task_type=REGRESSION,
         random_state=0,
+        backend=backend,
         metrics=[root_mean_squared_error],
     )
 
@@ -78,7 +79,7 @@ def testEnsembleSelection():
     )
 
 
-def testPredict():
+def testPredict(backend):
     # Test that ensemble prediction applies weights correctly to given
     # predictions. There are two possible cases:
     # 1) predictions.shape[0] == len(self.weights_). In this case,
@@ -93,6 +94,7 @@ def testPredict():
         ensemble_size=3,
         task_type=BINARY_CLASSIFICATION,
         random_state=0,
+        backend=backend,
         metrics=[accuracy],
     )
     # Test for case 1. Create (3, 2, 2) predictions.
