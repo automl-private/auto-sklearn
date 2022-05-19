@@ -36,24 +36,38 @@ class EnsembleSelection(AbstractEnsemble):
         ----------
         task_type: int
             An identifier indicating which task is being performed.
+
         metrics: Sequence[Scorer] | Scorer
             The metric used to evaluate the models. If multiple metrics are passed,
             ensemble selection only optimizes for the first
+
         random_state: Optional[int | RandomState] = None
             The random_state used for ensemble selection.
-            *   None - Uses numpy's default RandomState object
-            *   int - Successive calls to fit will produce the same results
-            *   RandomState - Truely random, each call to fit will produce
-                              different results, even with the same object.
+
+            * None - Uses numpy's default RandomState object
+            * int - Successive calls to fit will produce the same results
+            * RandomState - Truly random, each call to fit will produce
+              different results, even with the same object.
+
         backend : Backend
             Gives access to the backend of Auto-sklearn. Not used by Ensemble Selection.
+
         bagging: bool = False
             Whether to use bagging in ensemble selection
+
         mode: str in ['fast', 'slow'] = 'fast'
             Which kind of ensemble generation to use
-            *   'slow' - The original method used in Rich Caruana's ensemble selection.
-            *   'fast' - A faster version of Rich Caruanas' ensemble selection.
-        """
+            * 'slow' - The original method used in Rich Caruana's ensemble selection.
+            * 'fast' - A faster version of Rich Caruanas' ensemble selection.
+
+        References
+        ----------
+        | Ensemble selection from libraries of models
+        | Rich Caruana, Alexandru Niculescu-Mizil, Geoff Crew and Alex Ksikes
+        | ICML 2004
+        | https://dl.acm.org/doi/10.1145/1015330.1015432
+        | https://www.cs.cornell.edu/~caruana/ctp/ct.papers/caruana.icml04.icdm06long.pdf
+        """  # noqa: E501
         self.ensemble_size = ensemble_size
         self.task_type = task_type
         if isinstance(metrics, Sequence):
@@ -91,7 +105,7 @@ class EnsembleSelection(AbstractEnsemble):
         base_models_predictions: List[np.ndarray],
         true_targets: np.ndarray,
         model_identifiers: List[Tuple[int, int, float]],
-    ) -> AbstractEnsemble:
+    ) -> EnsembleSelection:
         self.ensemble_size = int(self.ensemble_size)
         if self.ensemble_size < 1:
             raise ValueError("Ensemble size cannot be less than one!")
@@ -120,7 +134,7 @@ class EnsembleSelection(AbstractEnsemble):
         self,
         predictions: List[np.ndarray],
         labels: np.ndarray,
-    ) -> AbstractEnsemble:
+    ) -> EnsembleSelection:
         if self.mode == "fast":
             self._fast(predictions, labels)
         else:
