@@ -146,6 +146,11 @@ class SingleBest(AbstractEnsemble):
 
         return output
 
+    def get_identifiers_with_weights(
+        self,
+    ) -> List[Tuple[Tuple[int, int, float], float]]:
+        return list(zip(self.identifiers_, self.weights_))
+
     def get_selected_model_identifiers(self) -> List[Tuple[int, int, float]]:
         output = []
 

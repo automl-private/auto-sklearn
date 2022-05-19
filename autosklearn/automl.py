@@ -1641,6 +1641,7 @@ class AutoML(BaseEstimator):
             seed=self._seed,
             run_history=self.runhistory_,
             backend=self._backend,
+            random_state=self._seed,
         )
         self._logger.warning(
             "No valid ensemble was created. Please check the log"
