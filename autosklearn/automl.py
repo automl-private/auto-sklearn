@@ -1713,7 +1713,7 @@ class AutoML(BaseEstimator):
 
             if self._task in CLASSIFICATION_TASKS:
                 # Scikit-learn would raise a shape error here which we
-                # have to work around...
+                # have to work around.
 
                 def inverse_transform(self, y):
                     if len(y.shape) == 1:

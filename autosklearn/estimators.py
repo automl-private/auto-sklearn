@@ -14,6 +14,8 @@ from typing import (
     Union,
 )
 
+import warnings
+
 import dask.distributed
 import joblib
 import numpy as np
@@ -44,6 +46,7 @@ class AutoSklearnEstimator(BaseEstimator):
         time_left_for_this_task=3600,
         per_run_time_limit=None,
         initial_configurations_via_metalearning=25,
+        ensemble_size: int | None = None,
         ensemble_class: Type[AbstractEnsemble] | None = EnsembleSelection,
         ensemble_kwargs: Dict[str, Any] | None = None,
         ensemble_nbest=50,
@@ -90,6 +93,8 @@ class AutoSklearnEstimator(BaseEstimator):
             many configurations which worked well on previously seen
             datasets. Disable if the hyperparameter optimization algorithm
             should start from scratch.
+
+        ensemble_size
 
         ensemble_class
 
@@ -366,6 +371,46 @@ class AutoSklearnEstimator(BaseEstimator):
             initial_configurations_via_metalearning
         )
         self.ensemble_class = ensemble_class
+
+        # User specified `ensemble_size` explicitly, warn them about deprecation
+        if ensemble_size is not None:
+            # Keep consistent behaviour
+            message = (
+                "`ensemble_size` has been deprecated, please use `ensemble_kwargs = "
+                "{'ensemble_size': %d}`. Inserting `ensemble_size` into "
+                "`ensemble_kwargs` for now. `ensemble_size` will be removed in "
+                "auto-sklearn 0.16."
+            ) % ensemble_size
+            if ensemble_class == EnsembleSelection:
+                if ensemble_kwargs is None:
+                    ensemble_kwargs = {"ensemble_size": ensemble_size}
+                    warnings.warn(message, DeprecationWarning, stacklevel=2)
+                elif "ensemble_size" not in ensemble_kwargs:
+                    ensemble_kwargs["ensemble_size"] = ensemble_size
+                    warnings.warn(message, DeprecationWarning, stacklevel=2)
+                else:
+                    warnings.warn(
+                        "Deprecated argument `ensemble_size` is both provided "
+                        "as an argument to the constructor and passed inside "
+                        "`ensemble_kwargs`. Will ignore the argument and use "
+                        "the value given in `ensemble_kwargs` (%d). `ensemble_size` "
+                        "will be removed in auto-sklearn 0.16."
+                        % ensemble_kwargs["ensemble_size"],
+                        DeprecationWarning,
+                        stacklevel=2,
+                    )
+            else:
+                warnings.warn(
+                    "`ensemble_size` has been deprecated, please use "
+                    "`ensemble_kwargs = {'ensemble_size': %d} if this "
+                    "was intended. Ignoring `ensemble_size` because "
+                    "`ensemble_class` != EnsembleSelection. "
+                    "`ensemble_size` will be removed in auto-sklearn 0.16."
+                    % ensemble_size,
+                    DeprecationWarning,
+                    stacklevel=2,
+                )
+
         self.ensemble_kwargs = ensemble_kwargs
         self.ensemble_nbest = ensemble_nbest
         self.max_models_on_disc = max_models_on_disc

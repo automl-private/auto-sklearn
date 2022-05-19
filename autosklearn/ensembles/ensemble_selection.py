@@ -39,19 +39,20 @@ class EnsembleSelection(AbstractEnsemble):
         metrics: Sequence[Scorer] | Scorer
             The metric used to evaluate the models. If multiple metrics are passed,
             ensemble selection only optimizes for the first
-        bagging: bool = False
-            Whether to use bagging in ensemble selection
-        mode: str in ['fast', 'slow'] = 'fast'
-            Which kind of ensemble generation to use
-            *   'slow' - The original method used in Rich Caruana's ensemble selection.
-            *   'fast' - A faster version of Rich Caruanas' ensemble selection.
-
         random_state: Optional[int | RandomState] = None
             The random_state used for ensemble selection.
             *   None - Uses numpy's default RandomState object
             *   int - Successive calls to fit will produce the same results
             *   RandomState - Truely random, each call to fit will produce
                               different results, even with the same object.
+        backend : Backend
+            Gives access to the backend of Auto-sklearn. Not used by Ensemble Selection.
+        bagging: bool = False
+            Whether to use bagging in ensemble selection
+        mode: str in ['fast', 'slow'] = 'fast'
+            Which kind of ensemble generation to use
+            *   'slow' - The original method used in Rich Caruana's ensemble selection.
+            *   'fast' - A faster version of Rich Caruanas' ensemble selection.
         """
         self.ensemble_size = ensemble_size
         self.task_type = task_type
