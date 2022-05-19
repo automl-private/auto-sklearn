@@ -37,7 +37,8 @@ def make_run(tmp_path: Path) -> Callable[..., Run]:
         mem_usage: float | None = None,
         predictions: str | list[str] | dict[str, np.ndarray] | None = "ensemble",
     ) -> Run:
-        assert loss is not None and losses is not None
+        if loss is not None and losses is not None:
+            raise ValueError("Can only specify either `loss` or `losses`")
 
         if dummy:
             assert id is None

@@ -133,7 +133,6 @@ def test_candidates_no_filters(
         dummy,
         better_than_dummy=False,
         nbest=None,
-        performance_range_threshold=None,
     )
 
     assert len(set(candidates) & discarded) == 0
@@ -292,48 +291,6 @@ def test_candidates_nbest_float(
     if any(discarded):
         worst_candidate = candidates[-1]
         assert all(worst_candidate.loss <= d.loss for d in discarded)
-
-
-@parametrize("threshold", [0.0, 0.25, 0.5, 1.0])
-def test_candidates_performance_range_threshold(
-    builder: EnsembleBuilder,
-    make_run: Callable[..., Run],
-    threshold: float,
-) -> None:
-    """
-    Expects
-    -------
-    * Should select runs that are `threshold` between the dummy loss and the best loss
-      This value is captured in `boundary`.
-    """
-    worst_loss = 100
-    best_loss = 0
-    dummy_loss = 50
-
-    boundary = threshold * best_loss + (1 - threshold) * dummy_loss
-
-    dummy = make_run(dummy=True, loss=dummy_loss)
-    runs = [make_run(loss=loss) for loss in np.linspace(best_loss, worst_loss, 101)]
-
-    candidates, discarded = builder.candidate_selection(
-        runs,
-        dummy,
-        performance_range_threshold=threshold,
-    )
-
-    assert len(candidates) > 0
-
-    # When no run is better than threshold, we just get 1 candidate,
-    # Make sure it's the best
-    if len(candidates) == 1:
-        assert all(r.loss >= candidates[0].loss for r in discarded)
-
-    else:
-        for run in candidates:
-            assert run.loss < boundary
-
-        for run in discarded:
-            assert run.loss >= boundary
 
 
 def test_requires_deletion_does_nothing_without_params(
