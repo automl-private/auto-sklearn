@@ -15,6 +15,7 @@ Tags:
     {cv, holdout} - Whether explicitly cv or holdout was used
     {no_ensemble} - Fit with no ensemble size
     {cached} - If the resulting case is then cached
+    {multiobjective} - If the automl instance is multiobjective
 """
 from __future__ import annotations
 
