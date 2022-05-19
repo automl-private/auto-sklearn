@@ -426,7 +426,9 @@ class AutoSklearnEstimator(BaseEstimator):
                     DeprecationWarning,
                     stacklevel=2,
                 )
-
+        self.ensemble_size = (
+            ensemble_size  # Otherwise sklean.base.get_params() will complain
+        )
         self.ensemble_kwargs = ensemble_kwargs
         self.ensemble_nbest = ensemble_nbest
         self.max_models_on_disc = max_models_on_disc
