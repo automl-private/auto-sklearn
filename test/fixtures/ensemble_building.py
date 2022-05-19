@@ -32,14 +32,17 @@ def make_run(tmp_path: Path) -> Callable[..., Run]:
         modified: bool = False,
         budget: float = 0.0,
         loss: float | None = None,
+        losses: dict[str, float] | list[float] | None = None,
         model_size: int | None = None,
         mem_usage: float | None = None,
         predictions: str | list[str] | dict[str, np.ndarray] | None = "ensemble",
     ) -> Run:
+        assert loss is not None and losses is not None
+
         if dummy:
             assert id is None
             id = 1
-            loss = loss if loss is not None else 50_000
+            losses = [loss] if loss is not None else [50_000]
 
         if id is None:
             id = np.random.randint(sys.maxsize)
@@ -81,7 +84,13 @@ def make_run(tmp_path: Path) -> Callable[..., Run]:
                 run.recorded_mtimes[k] = v + 1e-4
 
         if loss is not None:
-            run.loss = loss
+            losses = [loss]
+
+        if isinstance(losses, list):
+            losses = {f"metric_{i}": loss for i, loss in enumerate(losses)}
+
+        if isinstance(losses, dict):
+            run.losses = losses
 
         if mem_usage is not None:
             run._mem_usage = mem_usage

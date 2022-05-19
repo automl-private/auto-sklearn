@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from abc import ABCMeta, abstractmethod
 from typing import Any, Callable, Dict, List, Optional, Sequence
 
@@ -500,6 +502,37 @@ def calculate_scores(
                     raise e
 
     return score_dict
+
+
+def calculate_loss(
+    solution: np.ndarray,
+    prediction: np.ndarray,
+    task_type: int,
+    metric: Scorer,
+) -> float:
+    """Calculate the loss with a given metric
+
+    Parameters
+    ----------
+    solution: np.ndarray
+        The solutions
+
+    prediction: np.ndarray
+        The predictions generated
+
+    task_type: int
+        The task type of the problem
+
+    metric: Scorer
+        The metric to use
+    """
+    losses = calculate_losses(
+        solution=solution,
+        prediction=prediction,
+        task_type=task_type,
+        metrics=[metric],
+    )
+    return losses[metric.name]
 
 
 def calculate_losses(
