@@ -40,10 +40,14 @@ def make_run(tmp_path: Path) -> Callable[..., Run]:
         if loss is not None and losses is not None:
             raise ValueError("Can only specify either `loss` or `losses`")
 
+        if isinstance(loss, dict):
+            raise ValueError("Please use `losses` for dict of losses")
+
         if dummy:
             assert id is None
             id = 1
-            losses = [loss] if loss is not None else [50_000]
+            if loss is None and losses is None:
+                losses = {"metric_0": 50_000}
 
         if id is None:
             id = np.random.randint(sys.maxsize)

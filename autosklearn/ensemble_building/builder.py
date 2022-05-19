@@ -573,8 +573,7 @@ class EnsembleBuilder:
         return self.ensemble_history, self.ensemble_nbest
 
     def requires_loss_update(
-        self,
-        runs: Sequence[Run],
+        self, runs: Sequence[Run], metrics: Sequence[Scorer] | None = None
     ) -> list[Run]:
         """
 
@@ -583,14 +582,19 @@ class EnsembleBuilder:
         runs : Sequence[Run]
             The runs to process
 
+        metrics: Sequence[Scorer] | None = None
+            The metrics to check for, defaults to builders
+
         Returns
         -------
         list[Run]
             The runs that require a loss to be calculated
         """
+        metrics = metrics if metrics is not None else self.metrics
+
         queue = []
         for run in sorted(runs, key=lambda run: run.recorded_mtimes["ensemble"]):
-            if any(metric.name not in run.losses for metric in self.metrics):
+            if any(metric.name not in run.losses for metric in metrics):
                 queue.append(run)
 
             elif run.was_modified():
@@ -606,6 +610,7 @@ class EnsembleBuilder:
         *,
         better_than_dummy: bool = False,
         nbest: int | float | None = None,
+        metrics: Sequence[Scorer] | None = None,
     ) -> tuple[list[Run], set[Run]]:
         """Get a list of candidates from `runs`, garuanteeing at least one
 
@@ -631,16 +636,16 @@ class EnsembleBuilder:
             The nbest models to select. If `int`, acts as an absolute limit.
             If `float`, acts as a percentage of available candidates.
 
-        model_memory_limit : float | None
-            A maximum memory limit in MB for the runs to occupy. If the candidates at
-            this point exceed this limit, the best n candidates that fit into this limit
-            will be chosen.
+        metrics : Sequence[Scorer] | None = None
+            The metrics to consider, defaults to the builders
 
         Returns
         -------
         (candidates: list[Run], discarded: set[Run])
             A tuple of runs that are candidates and also those that didn't make it
         """
+        metrics = metrics if metrics else self.metrics
+
         if isinstance(dummies, Run):
             dummies = [dummies]
 
@@ -650,7 +655,8 @@ class EnsembleBuilder:
 
         # We filter out all runs that don't have any predictions for the ensemble
         candidates, discarded = split(
-            runs, by=lambda run: run.pred_path("ensemble").exists()
+            runs,
+            by=lambda run: run.pred_path("ensemble").exists(),
         )
         all_discarded.update(discarded)
 
@@ -662,13 +668,14 @@ class EnsembleBuilder:
             self.logger.warning(f"Have no ensemble predictions for {run}")
 
         # Get all the ones that have all metrics and tangible losses
-        has_metrics = lambda r: all(metric.name in r.losses for metric in self.metrics)
-        tangible_losses = lambda r: all(loss < np.inf for loss in r.losses)
+        has_metrics = lambda r: all(m.name in r.losses for m in metrics)
+        tangible_losses = lambda r: all(loss < np.inf for loss in r.losses.values())
 
         candidates, discarded = split(
             candidates, by=lambda r: has_metrics(r) and tangible_losses(r)
         )
         all_discarded.update(discarded)
+        print("all_discarded", all_discarded)
 
         if len(candidates) == 0:
             self.logger.debug("No runs with a usable loss, using dummies")
@@ -676,7 +683,7 @@ class EnsembleBuilder:
 
         if better_than_dummy:
             # We select the "best" dummy according to the first metric
-            first_metric = self.metrics[0].name
+            first_metric = metrics[0].name
             best_dummy = min(dummies, key=lambda r: r.losses[first_metric])
 
             self.logger.debug(f"Using dummy {best_dummy} to filter candidates")
@@ -699,24 +706,27 @@ class EnsembleBuilder:
                 )
                 return dummies, all_discarded
 
-        # We order the runs according to a roundrobin of the metrics
-        # i.e. the 1st run will be best in metric[0],
-        #      the 2nd run will be best in metric[1],
-        #      the 3rd run will be second best in metric[0],
-        #      the 4th run will be second best in metric[1],
-        #       ... whoops, what would be the 5th run, third best in metric[0] was also
-        #       ... the same as the 4th run. This was skipped
-        #      the 5th run will be third best in metric[1]  **as we skipped above**
-        #
-        # With removing duplicates, this means if a run was already contained, it will
-        # skip to the next member in the roundrobin fashion.
-        sorted_runs = [
-            sorted(runs, key=lambda r: (r.losses[metric.name], r.num_run))
-            for metric in self.metrics
-        ]
-        candidates = list(roundrobin(*sorted_runs, duplicates=False))
-
         if nbest is not None:
+            # We order the runs according to a roundrobin of the metrics
+            # i.e. the 1st run will be best in metric[0],
+            #      the 2nd run will be best in metric[1],
+            #      the 3rd run will be second best in metric[0],
+            #      the 4th run will be second best in metric[1],
+            #       ... whoops, what would be the 5th run, third best in metric[0] was
+            #           also the same as the 4th run. This was skipped
+            #      the 5th run will be third best in metric[1]  **as we skipped above**
+            #
+            # With removing duplicates, this means if a run was already contained, it
+            # will skip to the next member in the roundrobin fashion.
+            sorted_candidates = [
+                sorted(
+                    candidates,
+                    key=lambda r: (r.losses.get(m.name, np.inf), r.num_run),
+                )
+                for m in metrics
+            ]
+            candidates = list(roundrobin(*sorted_candidates, duplicates=False))
+
             # Determine how many to keep, always keeping one
             if isinstance(nbest, float):
                 nkeep = int(len(candidates) * nbest)
@@ -862,7 +872,7 @@ class EnsembleBuilder:
         # With removing duplicates, this means if a run was already contained, it will
         # skip to the next member in the roundrobin fashion.
         sorted_runs = [
-            sorted(runs, key=lambda r: (r.losses[metric.name], r.num_run))
+            sorted(runs, key=lambda r: (r.losses.get(metric.name, np.inf), r.num_run))
             for metric in self.metrics
         ]
         keep = list(roundrobin(*sorted_runs, duplicates=False))
@@ -924,7 +934,7 @@ class EnsembleBuilder:
                 solution=targets,
                 prediction=predictions,
                 task_type=self.task_type,
-                metrics=self.metrics,
+                metric=metric,
             )
         except Exception as e:
             tb = traceback.format_exc()

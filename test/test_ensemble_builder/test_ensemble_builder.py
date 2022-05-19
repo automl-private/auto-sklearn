@@ -86,8 +86,11 @@ def test_requires_loss_update_with_modified_runs(
     -------
     * Should include runs that were modified, even if they have a loss
     """
-    run_okay = [make_run(loss=1) for _ in range(5)]
-    run_modified = [make_run(loss=1, modified=True) for _ in range(5)]
+    metrics = builder.metrics
+    run_okay = [make_run(losses={m.name: 1 for m in metrics}) for _ in range(5)]
+    run_modified = [
+        make_run(losses={m.name: 1 for m in metrics}, modified=True) for _ in range(5)
+    ]
 
     runs = run_okay + run_modified
 
@@ -105,7 +108,8 @@ def test_requires_loss_update_with_no_loss(
     -------
     * Should include runs that have no loss
     """
-    run_okay = [make_run(loss=10) for _ in range(5)]
+    metrics = builder.metrics
+    run_okay = [make_run(losses={m.name: 10 for m in metrics}) for _ in range(5)]
     run_no_loss = [make_run() for _ in range(5)]
 
     runs = run_okay + run_no_loss
@@ -125,8 +129,9 @@ def test_candidates_no_filters(
     * Should not filter out any viable runs if no filters set. Here a viable run
       has a loss and ensemble predictions
     """
+    metrics = builder.metrics
     dummy = make_run(dummy=True)
-    runs = [make_run(loss=n) for n in range(10)]
+    runs = [make_run(losses={m.name: n for m in metrics}) for n in range(10)]
 
     candidates, discarded = builder.candidate_selection(
         runs,
@@ -149,9 +154,12 @@ def test_candidates_filters_runs_with_no_predictions(
     * Should have nothing in common between candidates and discarded
     * Should filter out runs with no "ensemble" predictions
     """
+    metrics = builder.metrics
+    dummy = make_run(dummy=True, losses={m.name: 2 for m in metrics})
+
     bad_runs = [make_run(predictions=None) for _ in range(5)]
-    dummy = make_run(dummy=True, loss=2)
-    good_run = make_run(predictions="ensemble", loss=1)
+
+    good_run = make_run(predictions="ensemble", losses={m.name: 1 for m in metrics})
 
     runs = bad_runs + [good_run]
 
@@ -171,9 +179,11 @@ def test_candidates_filters_runs_with_no_loss(
     -------
     * Should filter out runs with no loss
     """
-    bad_runs = [make_run(loss=None) for _ in range(5)]
-    dummy_run = make_run(dummy=True, loss=2)
-    good_run = make_run(loss=1)
+    metrics = builder.metrics
+
+    bad_runs = [make_run(losses=None) for _ in range(5)]
+    dummy_run = make_run(dummy=True, losses={m.name: 2 for m in metrics})
+    good_run = make_run(losses={m.name: 1 for m in metrics})
 
     runs = bad_runs + [good_run]
 
@@ -181,7 +191,9 @@ def test_candidates_filters_runs_with_no_loss(
 
     assert len(candidates) == 1
     assert len(discarded) == len(bad_runs)
-    assert candidates[0].loss == 1
+
+    # Only candidate should be the one with a loss of 1
+    assert candidates[0].losses == {m.name: 1 for m in metrics}
 
 
 def test_candidates_filters_out_better_than_dummy(
@@ -193,23 +205,31 @@ def test_candidates_filters_out_better_than_dummy(
     -------
     * Should filter out runs worse than dummy
     """
-    bad_runs = [make_run(loss=1) for _ in range(2)]
-    dummy_run = make_run(dummy=True, loss=0)
-    good_runs = [make_run(loss=-1) for _ in range(3)]
+    metrics = builder.metrics
+
+    bad_runs = [make_run(losses={m.name: 1 for m in metrics}) for _ in range(2)]
+    dummy_run = make_run(dummy=True, losses={m.name: 0 for m in metrics})
+    good_runs = [make_run(losses={m.name: -1 for m in metrics}) for _ in range(3)]
 
     runs = bad_runs + good_runs
 
     candidates, discarded = builder.candidate_selection(
-        runs, dummy_run, better_than_dummy=True
+        runs,
+        dummy_run,
+        better_than_dummy=True,
     )
 
     assert set(candidates)
 
     assert len(candidates) == 3
-    assert all(run.loss < dummy_run.loss for run in candidates)
+
+    for run, metric in zip(candidates, metrics):
+        assert run.losses[metric.name] < dummy_run.losses[metric.name]
 
     assert len(discarded) == 2
-    assert all(run.loss >= dummy_run.loss for run in discarded)
+
+    for run, metric in zip(discarded, metrics):
+        assert run.losses[metric.name] >= dummy_run.losses[metric.name]
 
 
 def test_candidates_uses_dummy_if_no_candidates_better(
@@ -222,8 +242,12 @@ def test_candidates_uses_dummy_if_no_candidates_better(
     * If no run is better than a dummy run, the candidates will then consist
       of the dummy runs.
     """
-    runs = [make_run(loss=10) for _ in range(10)]
-    dummies = [make_run(dummy=True, loss=0) for _ in range(2)]
+    metrics = builder.metrics
+
+    runs = [make_run(losses={m.name: 10 for m in metrics}) for _ in range(10)]
+    dummies = [
+        make_run(dummy=True, losses={m.name: 0 for m in metrics}) for _ in range(2)
+    ]
 
     candidates, discarded = builder.candidate_selection(
         runs,
@@ -236,7 +260,7 @@ def test_candidates_uses_dummy_if_no_candidates_better(
 
 
 @parametrize("nbest", [0, 1, 5, 1000])
-def test_candidates_nbest_int(
+def test_candidates_nbest_int_single_objective(
     builder: EnsembleBuilder,
     make_run: Callable[..., Run],
     nbest: int,
@@ -247,25 +271,33 @@ def test_candidates_nbest_int(
     * Should only select the nbest candidates
     * They should be ordered by loss
     """
+    # Make sure it's single objective being tested
+    assert len(builder.metrics) == 1
+    metric = builder.metrics[0]
+
     n = 10
     expected = int(bound(nbest, bounds=(1, n)))
 
-    dummy = make_run(dummy=True)
-    runs = [make_run(loss=i) for i in range(n)]
+    dummy = make_run(dummy=True, losses={metric.name: 50_000})
+    runs = [make_run(losses={metric.name: i}) for i in range(n)]
     candidates, discarded = builder.candidate_selection(runs, dummy, nbest=nbest)
 
     assert len(candidates) == expected
 
     if len(candidates) > 1:
-        assert all(a.loss <= b.loss for a, b in pairs(candidates))
+        for a, b in pairs(candidates):
+            assert a.losses[metric.name] <= b.losses[metric.name]
 
+    # Make sure all discarded are worse than the worst candidate
     if any(discarded):
-        worst_candidate = candidates[-1]
-        assert all(worst_candidate.loss <= d.loss for d in discarded)
+        worst_candidate_loss = candidates[-1].losses[metric.name]
+
+        for d in discarded:
+            assert worst_candidate_loss <= d.losses[metric.name]
 
 
 @parametrize("nbest", [0.0, 0.25, 0.5, 1.0])
-def test_candidates_nbest_float(
+def test_candidates_nbest_float_single_objective(
     builder: EnsembleBuilder,
     make_run: Callable[..., Run],
     nbest: float,
@@ -276,21 +308,30 @@ def test_candidates_nbest_float(
     * Should select nbest percentage of candidates
     * They should be ordered by loss
     """
+    # Make sure it's single objective being tested
+    assert len(builder.metrics) == 1
+    metric = builder.metrics[0]
+
     n = 10
     expected = int(bound(nbest * n, bounds=(1, n)))
 
-    dummy = make_run(dummy=True, loss=0)
-    runs = [make_run(id=i, loss=i) for i in range(2, n + 2)]
+    dummy = make_run(dummy=True, losses={metric.name: 50_000})
+    runs = [make_run(id=i, losses={metric.name: i}) for i in range(2, n + 2)]
+
     candidates, discarded = builder.candidate_selection(runs, dummy, nbest=nbest)
 
     assert len(candidates) == expected
 
     if len(candidates) > 1:
-        assert all(a.loss <= b.loss for a, b in pairs(candidates))
+        for a, b in pairs(candidates):
+            assert a.losses[metric.name] <= b.losses[metric.name]
 
+    # Make sure all discarded are worse than the worst candidate
     if any(discarded):
-        worst_candidate = candidates[-1]
-        assert all(worst_candidate.loss <= d.loss for d in discarded)
+        worst_candidate_loss = candidates[-1].losses[metric.name]
+
+        for d in discarded:
+            assert worst_candidate_loss <= d.losses[metric.name]
 
 
 def test_requires_deletion_does_nothing_without_params(
@@ -336,7 +377,7 @@ def test_requires_deletion_max_models(
 
 
 @parametrize("memory_limit, expected", [(0, 0), (100, 0), (200, 1), (5000, 49)])
-def test_requires_memory_limit(
+def test_requires_memory_limit_single_objective(
     builder: EnsembleBuilder,
     make_run: Callable[..., Run],
     memory_limit: int,
@@ -350,7 +391,11 @@ def test_requires_memory_limit(
     * Should not have any models in common between keep and delete
     * All models kept should be better than those deleted
     """
-    runs = [make_run(mem_usage=100, loss=-n) for n in range(50)]
+    # Make sure it's single objective being tested
+    assert len(builder.metrics) == 1
+    metric = builder.metrics[0]
+
+    runs = [make_run(mem_usage=100, losses={metric.name: -n}) for n in range(50)]
     random.shuffle(runs)
 
     keep, delete = builder.requires_deletion(runs=runs, memory_limit=memory_limit)
@@ -368,10 +413,12 @@ def test_requires_memory_limit(
     assert not any(set(keep) & set(delete))
 
     if len(keep) > 2:
-        assert all(a.loss <= b.loss for a, b in pairs(keep))
+        for a, b in pairs(keep):
+            assert a.losses[metric.name] <= b.losses[metric.name]
 
-    best_deleted = min(r.loss for r in delete)
-    assert not any(run.loss > best_deleted for run in keep)
+    # Make sure that the best run deleted is still worse than all those kept
+    best_deleted = min(r.losses[metric.name] for r in delete)
+    assert not any(run.losses[metric.name] > best_deleted for run in keep)
 
 
 @parametrize("kind", ["ensemble", "test"])
@@ -386,8 +433,9 @@ def test_loss_with_no_ensemble_targets(
     * Should give a loss of np.inf if run has no predictions of a given kind
     """
     run = make_run(predictions=None)
+    metric = builder.metrics[0]
 
-    assert builder.loss(run, kind=kind) == np.inf
+    assert builder.loss(run, metric=metric, kind=kind) == np.inf
 
 
 @parametrize("kind", ["ensemble", "test"])
@@ -402,10 +450,11 @@ def test_loss_with_targets(
     * Should give a loss < np.inf if the predictions exist
     """
     targets = builder.targets(kind)
+    metric = builder.metrics[0]
 
     run = make_run(predictions={kind: targets})
 
-    assert builder.loss(run, kind) < np.inf
+    assert builder.loss(run, metric=metric, kind=kind) < np.inf
 
 
 def test_delete_runs(builder: EnsembleBuilder, make_run: Callable[..., Run]) -> None:
@@ -532,6 +581,7 @@ def test_deletion_will_not_break_current_ensemble(
         max_models_on_disc=10,
         seed=DEFAULT_SEED,
     )
+    metric = builder.metrics[0]
 
     # Stick a dummy run and 10 bad runs into the backend
     datamanager = builder.backend.load_datamanager()
@@ -540,7 +590,7 @@ def test_deletion_will_not_break_current_ensemble(
     bad_predictions = {"ensemble": np.zeros_like(targets)}
     good_predictions = {"ensemble": targets}
 
-    make_run(dummy=True, loss=10000, backend=builder.backend)
+    make_run(dummy=True, losses={metric.name: 10000}, backend=builder.backend)
     bad_runs = [
         make_run(backend=builder.backend, predictions=bad_predictions)
         for _ in range(10)
