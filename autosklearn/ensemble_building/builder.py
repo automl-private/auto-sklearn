@@ -883,6 +883,12 @@ class EnsembleBuilder:
             keep, to_delete = cut(keep, max_models)
 
             if any(to_delete):
+                self.logger.info(
+                    "Limiting num of models via `max_models_on_disc`"
+                    f" max_models={max_models}"
+                    f" remaining={len(keep)}"
+                    f" discarded={len(to_delete)}"
+                )
                 delete.update(to_delete)
 
         if memory_limit is not None:
@@ -895,7 +901,7 @@ class EnsembleBuilder:
             keep, to_delete = cut(keep, cutpoint)
 
             if any(to_delete):
-                self.logger.warning(
+                self.logger.info(
                     "Limiting num of models via `memory_limit`"
                     f" memory_limit={memory_limit}"
                     f" cutoff={cutoff}"
