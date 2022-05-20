@@ -674,7 +674,8 @@ class EnsembleBuilder:
         tangible_losses = lambda r: all(loss < np.inf for loss in r.losses.values())
 
         candidates, discarded = split(
-            candidates, by=lambda r: has_metrics(r) and tangible_losses(r)
+            candidates,
+            by=lambda r: has_metrics(r) and tangible_losses(r),
         )
         all_discarded.update(discarded)
         print("all_discarded", all_discarded)
@@ -684,19 +685,36 @@ class EnsembleBuilder:
             return dummies, all_discarded
 
         if better_than_dummy:
-            # We select the "best" dummy according to the first metric
-            first_metric = metrics[0].name
-            best_dummy = min(dummies, key=lambda r: r.losses[first_metric])
 
-            self.logger.debug(f"Using dummy {best_dummy} to filter candidates")
+            # In the single objective case, they must explicitly be better than dummy
+            if len(metrics) == 1:
+                metric = metrics[0]
 
-            candidates, discarded = split(
-                candidates,
-                by=lambda r: any(
-                    r.losses[metric_name] < value
-                    for metric_name, value in best_dummy.losses.items()
-                ),
-            )
+                best_dummy = min(dummies, key=lambda d: d.losses[metric.name])
+                self.logger.debug(f"Using dummy {best_dummy} to filter candidates")
+
+                candidates, discarded = split(
+                    candidates,
+                    by=lambda r: r.losses[metric.name] < best_dummy.losses[metric.name],
+                )
+
+            # In the multiobjective case, they must be better than at least one of the
+            # best dummies, where there is a best dummy for each metric
+            else:
+                best_dummies = {
+                    metric.name: min(dummies, key=lambda d: d.losses[metric.name])
+                    for metric in metrics
+                }
+                self.logger.debug(f"Using dummies {best_dummies} to filter candidates")
+
+                candidates, discarded = split(
+                    candidates,
+                    by=lambda r: any(
+                        r.losses[metric_name] < best_dummy.losses[metric_name]
+                        for metric_name, best_dummy in best_dummies.items()
+                    ),
+                )
+
             all_discarded.update(discarded)
 
             # If there are no real candidates left, use the dummies

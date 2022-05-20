@@ -260,6 +260,71 @@ def test_candidates_uses_dummy_if_no_candidates_better(
     assert all(run.is_dummy() for run in candidates)
 
 
+def test_candidates_better_than_dummy_multiobjective(
+    builder: EnsembleBuilder,
+    make_run: Callable[..., Run],
+) -> None:
+    """
+    Expects
+    -------
+    * For a run to be considered a candidate, it must be better than the best dummy for
+      any one of the objectives.
+    """
+    x = make_scorer("x", lambda: None)
+    y = make_scorer("y", lambda: None)
+
+    # The will be one best dummy per objective achieving a loss of 1
+    # You can think of this as a joint filter [1, 1] over "x", "y" losses
+    dummies = [
+        make_run(dummy=True, losses={"x": 1, "y": 500}),
+        make_run(dummy=True, losses={"x": 500, "y": 1}),
+    ]
+
+    # Clearly better on both objectives
+    good_runs = [make_run(losses={"x": 0, "y": 0}) for _ in range(5)]
+
+    # Worse on both
+    badd_runs = [make_run(losses={"x": 2, "y": 2}) for _ in range(5)]
+
+    # Better on 1 objective but worse on the other
+    may1_runs = [make_run(losses={"x": 2, "y": 0}) for _ in range(5)]
+    may2_runs = [make_run(losses={"x": 0, "y": 2}) for _ in range(5)]
+
+    # Better on 1 objective but equal one the other
+    may3_runs = [make_run(losses={"x": 1, "y": 0}) for _ in range(5)]
+    may4_runs = [make_run(losses={"x": 0, "y": 1}) for _ in range(5)]
+
+    # Equal on 1 objective but worse one the other
+    may5_runs = [make_run(losses={"x": 1, "y": 2}) for _ in range(5)]
+    may6_runs = [make_run(losses={"x": 2, "y": 1}) for _ in range(5)]
+
+    expected_candidates = [
+        *good_runs,
+        *may1_runs,
+        *may2_runs,
+        *may3_runs,
+        *may4_runs,
+    ]
+
+    expected_discarded = [
+        *badd_runs,
+        *may5_runs,
+        *may6_runs,
+    ]
+
+    runs = expected_candidates + expected_discarded
+
+    candidates, discarded = builder.candidate_selection(
+        runs, dummies, better_than_dummy=True, metrics=[x, y]
+    )
+
+    # No duplicates
+    assert len(candidates) == len(set(candidates))
+
+    assert set(candidates) == set(expected_candidates)
+    assert discarded == set(expected_discarded)
+
+
 @parametrize("nbest", [0, 1, 5, 1000])
 def test_candidates_nbest_int_single_objective(
     builder: EnsembleBuilder,
@@ -386,8 +451,8 @@ def test_requires_deletion_max_models_multiobjective_no_overlap(
     """
     Expects
     -------
-    * When deleting runs with multiple objectives, they should be deleted in a round
-      robin fashion.
+    * When deleting runs with multiple objectives, they runs kept should be done so in
+      a roundrobin fashion with respect to each metric.
     """
     # In this case, the runs have no overlap as they are round robin'ed, the order they
     # are put in is the same as the order they come out where priority shifts between
@@ -425,6 +490,64 @@ def test_requires_deletion_max_models_multiobjective_no_overlap(
 
     assert keep == expected_keep
     assert delete == expected_delete
+
+
+@parametrize("max_models", [0, 1, 2, 5, 7])
+def test_requires_deletion_max_models_multiobjective_overlap(
+    builder: EnsembleBuilder,
+    make_run: Callable[..., Run],
+    max_models: int,
+) -> None:
+    """
+    Expects
+    -------
+    * When deleting runs with multiple objectives, they runs kept should be done so in
+      a roundrobin fashion with respect to each metric. With overlap, it should
+      prioritize the first objective.
+    """
+    # You can read the losses as a binary counter to make sense of it
+    runs = [
+        make_run(id=2, losses={"x": 0, "y": 0, "z": 0}),
+        make_run(id=3, losses={"x": 0, "y": 0, "z": 1}),
+        make_run(id=4, losses={"x": 0, "y": 1, "z": 0}),
+        make_run(id=5, losses={"x": 0, "y": 1, "z": 1}),
+        make_run(id=6, losses={"x": 1, "y": 0, "z": 0}),
+        make_run(id=7, losses={"x": 1, "y": 0, "z": 1}),
+        make_run(id=8, losses={"x": 1, "y": 1, "z": 0}),
+        make_run(id=9, losses={"x": 1, "y": 1, "z": 1}),
+    ]
+
+    # The expected order is to prefer the lowest on all objectives
+    expected_order = [
+        # Best at all
+        make_run(id=2, losses={"x": 0, "y": 0, "z": 0}),
+        # Best at 2 but prioritizing the first objective
+        make_run(id=3, losses={"x": 0, "y": 0, "z": 1}),
+        make_run(id=4, losses={"x": 0, "y": 1, "z": 0}),
+        make_run(id=6, losses={"x": 1, "y": 0, "z": 0}),
+        # Best at 1
+        make_run(id=5, losses={"x": 0, "y": 1, "z": 1}),
+        make_run(id=7, losses={"x": 1, "y": 0, "z": 1}),
+        make_run(id=8, losses={"x": 1, "y": 1, "z": 0}),
+        #
+        make_run(id=9, losses={"x": 1, "y": 1, "z": 1}),
+    ]
+
+    # Dummy metrics, only used for their names
+    x = make_scorer("x", lambda: None)
+    y = make_scorer("y", lambda: None)
+
+    # Shuffle the runs to ensure correct sorting takes place
+    random.shuffle(runs)
+
+    keep, delete = builder.requires_deletion(
+        runs,
+        max_models=max_models,
+        metrics=[x, y],
+    )
+
+    assert keep == expected_order[:max_models]
+    assert delete == set(expected_order[max_models:])
 
 
 @parametrize("memory_limit, expected", [(0, 0), (100, 0), (200, 1), (5000, 49)])
