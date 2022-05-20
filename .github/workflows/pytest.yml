@@ -45,9 +45,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ubuntu-latest # [windows-latest, macos-latest, ubuntu-latest]
-        python-version: '3.7' # ['3.7', '3.8', '3.9', '3.10']
-        kind: 'source' # ['conda', 'source', 'dist']
+        os: [ubuntu-latest] # [windows-latest, macos-latest, ubuntu-latest]
+        python-version: ['3.7'] # ['3.7', '3.8', '3.9', '3.10']
+        kind: ['source'] # ['conda', 'source', 'dist']
 
         # exclude:
           # Exclude all configurations *-*-dist, include one later
