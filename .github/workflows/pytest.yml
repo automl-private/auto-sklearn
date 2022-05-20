@@ -16,9 +16,9 @@ on:
       - master
       - development
 
-  schedule:
+  # schedule:
     # Every day at 7AM UTC
-    - cron: '0 07 * * *'
+    # - cron: '0 07 * * *'
 
 env:
 
@@ -45,31 +45,31 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, macos-latest, ubuntu-latest]
-        python-version: ['3.7', '3.8', '3.9', '3.10']
-        kind: ['conda', 'source', 'dist']
+        os: ubuntu-latest # [windows-latest, macos-latest, ubuntu-latest]
+        python-version: '3.7' # ['3.7', '3.8', '3.9', '3.10']
+        kind: 'source' # ['conda', 'source', 'dist']
 
-        exclude:
+        # exclude:
           # Exclude all configurations *-*-dist, include one later
-          - kind: 'dist'
+          # - kind: 'dist'
 
           # Exclude windows as bash commands wont work in windows runner
-          - os: windows-latest
+          # - os: windows-latest
 
           # Exclude macos as there are permission errors using conda as we do
-          - os: macos-latest
+          # - os: macos-latest
 
-        include:
+      # include:
           # Add the tag code-cov to ubuntu-3.7-source
-          - os: ubuntu-latest
-            python-version: 3.7
-            kind: 'source'
-            code-cov: true
+          # - os: ubuntu-latest
+          #   python-version: 3.7
+          #   kind: 'source'
+          #   code-cov: true
 
-           # Include one config with dist, ubuntu-3.7-dist
-          - os: ubuntu-latest
-            python-version: 3.7
-            kind: 'dist'
+          # Include one config with dist, ubuntu-3.7-dist
+          # - os: ubuntu-latest
+          #   python-version: 3.7
+          #   kind: 'dist'
 
     steps:
 
