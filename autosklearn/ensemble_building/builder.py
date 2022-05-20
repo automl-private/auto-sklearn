@@ -573,7 +573,9 @@ class EnsembleBuilder:
         return self.ensemble_history, self.ensemble_nbest
 
     def requires_loss_update(
-        self, runs: Sequence[Run], metrics: Sequence[Scorer] | None = None
+        self,
+        runs: Sequence[Run],
+        metrics: Sequence[Scorer] | None = None,
     ) -> list[Run]:
         """
 
@@ -833,6 +835,7 @@ class EnsembleBuilder:
         *,
         max_models: int | None = None,
         memory_limit: float | None = None,
+        metrics: Sequence[Scorer] | None = None,
     ) -> tuple[list[Run], set[Run]]:
         """Cut a list of runs into those to keep and those to delete
 
@@ -852,6 +855,10 @@ class EnsembleBuilder:
         memory_limit : float | None = None
             The memory limit in MB, leave `None` for no effect
 
+        metrics: Sequence[Scorer] | None = None
+            The metrics to consider for the runs, defaults to `self.metrics` passed
+            during construction if `None`.
+
         Returns
         -------
         (keep: list[Run], delete: set[Run])
@@ -859,6 +866,8 @@ class EnsembleBuilder:
         """
         if memory_limit is None and max_models is None:
             return list(runs), set()
+
+        metrics = metrics if metrics is not None else self.metrics
 
         # We order the runs according to a roundrobin of the metrics
         # i.e. the 1st run will be best in metric[0],
@@ -873,7 +882,7 @@ class EnsembleBuilder:
         # skip to the next member in the roundrobin fashion.
         sorted_runs = [
             sorted(runs, key=lambda r: (r.losses.get(metric.name, np.inf), r.num_run))
-            for metric in self.metrics
+            for metric in metrics
         ]
         keep = list(roundrobin(*sorted_runs, duplicates=False))
 
@@ -924,6 +933,9 @@ class EnsembleBuilder:
         metric: Scorer
             The metric to calculate the loss of
 
+        kind: str = "ensemble"
+            The kind of targets to use for the run
+
         Returns
         -------
         float
@@ -936,7 +948,7 @@ class EnsembleBuilder:
 
         try:
             predictions = run.predictions(kind, precision=self.precision)
-            loss: float = calculate_loss(  # type: ignore
+            loss: float = calculate_loss(
                 solution=targets,
                 prediction=predictions,
                 task_type=self.task_type,
