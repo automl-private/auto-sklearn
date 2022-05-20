@@ -10,6 +10,7 @@ import numpy as np
 
 from autosklearn.automl_common.common.utils.backend import Backend
 from autosklearn.ensemble_building import EnsembleBuilder, Run
+from autosklearn.metrics import make_scorer
 from autosklearn.util.functional import bound, pairs
 
 import pytest
@@ -374,6 +375,56 @@ def test_requires_deletion_max_models(
     assert len(delete) == len(runs) - max_models
 
     assert not any(set(keep) & set(delete))
+
+
+@parametrize("max_models", [0, 1, 2, 5])
+def test_requires_deletion_max_models_multiobjective_no_overlap(
+    builder: EnsembleBuilder,
+    make_run: Callable[..., Run],
+    max_models: int,
+) -> None:
+    """
+    Expects
+    -------
+    * When deleting runs with multiple objectives, they should be deleted in a round
+      robin fashion.
+    """
+    # In this case, the runs have no overlap as they are round robin'ed, the order they
+    # are put in is the same as the order they come out where priority shifts between
+    # the three objectives
+    runs = [
+        make_run(id=2, losses={"x": 0, "y": 100, "z": 100}),
+        make_run(id=3, losses={"x": 100, "y": 0, "z": 100}),
+        make_run(id=4, losses={"x": 100, "y": 100, "z": 0}),
+        #
+        make_run(id=5, losses={"x": 1, "y": 100, "z": 100}),
+        make_run(id=6, losses={"x": 100, "y": 1, "z": 100}),
+        make_run(id=7, losses={"x": 100, "y": 100, "z": 1}),
+        #
+        make_run(id=8, losses={"x": 2, "y": 100, "z": 100}),
+        make_run(id=9, losses={"x": 100, "y": 2, "z": 100}),
+        make_run(id=10, losses={"x": 100, "y": 100, "z": 2}),
+    ]
+
+    expected_keep = list(runs[:max_models])
+    expected_delete = set(runs[max_models:])
+
+    # Dummy metrics, only used for their names
+    x = make_scorer("x", lambda: None)
+    y = make_scorer("y", lambda: None)
+    z = make_scorer("z", lambda: None)
+
+    # Shuffle the runs to ensure correct sorting takes place
+    random.shuffle(runs)
+
+    keep, delete = builder.requires_deletion(
+        runs,
+        max_models=max_models,
+        metrics=[x, y, z],
+    )
+
+    assert keep == expected_keep
+    assert delete == expected_delete
 
 
 @parametrize("memory_limit, expected", [(0, 0), (100, 0), (200, 1), (5000, 49)])
