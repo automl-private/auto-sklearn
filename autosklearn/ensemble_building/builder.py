@@ -439,11 +439,16 @@ class EnsembleBuilder:
                 memory_limit=self.model_memory_limit,
             )
 
-            # If there are no candidates left, we just keep the best one according to
-            # the first metric
+            # If there are no candidates left, we just keep the best one, ordered by
+            # objectives and finally num_run
             if not any(candidates):
-                first_metric = self.metrics[0].name
-                best = min(to_delete, key=lambda r: (r.losses[first_metric], r.num_run))
+                best = min(
+                    to_delete,
+                    key=lambda r: (
+                        *[r.losses.get(m.name, np.inf) for m in self.metrics],
+                        r.num_run,
+                    ),
+                )
                 candidates = [best]
                 to_delete.remove(best)
 
