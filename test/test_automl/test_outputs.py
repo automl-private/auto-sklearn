@@ -20,7 +20,7 @@ def test_datamanager_stored_contents() -> None:
     ...
 
 
-@parametrize_with_cases("automl", cases=cases, has_tag="fitted")
+@parametrize_with_cases("automl", cases=cases, filter=has_ensemble)
 def test_paths_created(automl: AutoML) -> None:
     """
     Parameters
