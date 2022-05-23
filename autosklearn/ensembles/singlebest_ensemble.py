@@ -8,6 +8,7 @@ import numpy as np
 from smac.runhistory.runhistory import RunHistory
 
 from autosklearn.automl_common.common.utils.backend import Backend
+from autosklearn.ensemble_building.run import Run
 from autosklearn.ensembles.abstract_ensemble import AbstractEnsemble
 from autosklearn.metrics import Scorer
 from autosklearn.pipeline.base import BasePipeline
@@ -53,6 +54,7 @@ class SingleBest(AbstractEnsemble):
         base_models_predictions: np.ndarray | List[np.ndarray],
         true_targets: np.ndarray,
         model_identifiers: List[Tuple[int, int, float]],
+        runs: Sequence[Run],
     ) -> "AbstractEnsemble":
         return self
 

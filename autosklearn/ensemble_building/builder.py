@@ -524,6 +524,7 @@ class EnsembleBuilder:
         ensemble = self.fit_ensemble(
             candidates,
             targets=targets,
+            runs=runs,
             ensemble_class=self.ensemble_class,
             ensemble_kwargs=self.ensemble_kwargs,
             task=self.task_type,
@@ -683,7 +684,6 @@ class EnsembleBuilder:
             by=lambda r: has_metrics(r) and tangible_losses(r),
         )
         all_discarded.update(discarded)
-        print("all_discarded", all_discarded)
 
         if len(candidates) == 0:
             self.logger.debug("No runs with a usable loss, using dummies")
@@ -772,9 +772,10 @@ class EnsembleBuilder:
 
     def fit_ensemble(
         self,
-        runs: list[Run],
+        candidates: list[Run],
         targets: np.ndarray,
         *,
+        runs: list[Run],
         ensemble_class: Type[AbstractEnsemble] = EnsembleSelection,
         ensemble_kwargs: Dict[str, Any] | None = None,
         task: int | None = None,
@@ -790,14 +791,20 @@ class EnsembleBuilder:
 
         Parameters
         ----------
-        runs: list[Run]
+        candidates: list[Run]
             List of runs to build an ensemble from
 
         targets: np.ndarray
             The targets to build the ensemble with
 
-        size: int | None = None
-            The size of the ensemble to build
+        runs: list[Run]
+            List of all runs (also pruned ones and dummy runs)
+
+        ensemble_class: AbstractEnsemble
+            Implementation of the ensemble algorithm.
+
+        ensemble_kwargs: Dict[str, Any]
+            Arguments passed to the constructor of the ensemble algorithm.
 
         task: int | None = None
             The kind of task performed
@@ -834,18 +841,19 @@ class EnsembleBuilder:
             **ensemble_kwargs,
         )  # type: AbstractEnsemble
 
-        self.logger.debug(f"Fitting ensemble on {len(runs)} models")
+        self.logger.debug(f"Fitting ensemble on {len(candidates)} models")
         start_time = time.time()
 
         precision = precision if precision is not None else self.precision
         predictions_train = [
-            run.predictions("ensemble", precision=precision) for run in runs
+            run.predictions("ensemble", precision=precision) for run in candidates
         ]
 
         ensemble.fit(
             base_models_predictions=predictions_train,
             true_targets=targets,
-            model_identifiers=[run.id for run in runs],
+            model_identifiers=[run.id for run in candidates],
+            runs=runs,
         )
 
         duration = time.time() - start_time

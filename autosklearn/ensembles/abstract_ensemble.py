@@ -6,6 +6,7 @@ from typing import Dict, List, Sequence, Tuple, Union
 import numpy as np
 
 from autosklearn.automl_common.common.utils.backend import Backend
+from autosklearn.ensemble_building.run import Run
 from autosklearn.metrics import Scorer
 from autosklearn.pipeline.base import BasePipeline
 
@@ -27,6 +28,7 @@ class AbstractEnsemble(ABC):
         base_models_predictions: np.ndarray | List[np.ndarray],
         true_targets: np.ndarray,
         model_identifiers: List[Tuple[int, int, float]],
+        runs: Sequence[Run],
     ) -> "AbstractEnsemble":
         """Fit an ensemble given predictions of base models and targets.
 
@@ -47,6 +49,10 @@ class AbstractEnsemble(ABC):
 
         model_identifiers : identifier for each base model.
             Can be used for practical text output of the ensemble.
+
+        runs: Sequence[Run]
+            Additional information for each run executed by SMAC that was
+            considered by the ensemble builder.
 
         Returns
         -------

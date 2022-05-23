@@ -15,11 +15,13 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple, Type, Union, cast
 import warnings
 
 import numpy as np
+import pandas as pd
 import sklearn.utils
 import sklearn.utils.validation
 
 from autosklearn.automl_common.common.utils.backend import Backend
 from autosklearn.constants import TASK_TYPES, CLASSIFICATION_TASKS
+from autosklearn.ensemble_building.run import Run
 from autosklearn.ensembles.abstract_ensemble import AbstractEnsemble
 from autosklearn.ensembles.abstract_ensemble import AbstractMultiObjectiveEnsemble
 from autosklearn.metrics import Scorer, calculate_losses
@@ -27,10 +29,16 @@ from autosklearn.pipeline.base import BasePipeline
 
 
 class WeightedMetricScorer(Scorer):
-    def __init__(self, weights: np.ndarray | List[float], metrics: Sequence[Scorer]):
+    def __init__(
+        self,
+        weights: np.ndarray | List[float],
+        metrics: Sequence[Scorer],
+        scaling_statistics: pd.DataFrame,
+    ):
         self.name = "WeightedMetrics"
         self.weights = weights
         self.metrics = metrics
+        self.scaling_statistics = scaling_statistics
         self._sign = 1
         self._worst_possible_result = 0
         self._optimum = 0
@@ -42,9 +50,13 @@ class WeightedMetricScorer(Scorer):
         sample_weight: Optional[List[float]] = None,
     ) -> float:
         scores = []
-        # TODO: can we somehow add a normalization of the individual scores here?
+
         for metric, weight in zip(self.metrics, self.weights):
-            scores.append(metric(y_true, y_pred, sample_weight) * weight)
+            value = metric(y_true=y_true, y_pred=y_pred, sample_weight=sample_weight)
+            value = (
+                value - self.scaling_statistics["min"][metric.name]
+            ) / self.scaling_statistics["diff"][metric.name]
+            scores.append(value * weight)
         return cast(float, np.sum(scores))
 
 
@@ -103,6 +115,26 @@ def get_weights(
     return all_weights
 
 
+def get_scaling_statistics(
+    runs: Sequence[Run], metrics: Sequence[Scorer]
+) -> pd.DataFrame:
+    score_statistics = pd.DataFrame(
+        index=[metric.name for metric in metrics], columns=["min", "max", "diff"]
+    )
+    for metric in metrics:
+        scores_for_metric = [run.losses[metric.name] for run in runs]
+        score_statistics["min"][metric.name] = metric._optimum - np.max(
+            scores_for_metric
+        )
+        score_statistics["max"][metric.name] = metric._optimum - np.min(
+            scores_for_metric
+        )
+        score_statistics["diff"][metric.name] = (
+            score_statistics["max"][metric.name] - score_statistics["min"][metric.name]
+        )
+    return score_statistics
+
+
 class MultiObjectiveEnsembleWrapper(AbstractMultiObjectiveEnsemble):
     def __init__(
         self,
@@ -111,7 +143,7 @@ class MultiObjectiveEnsembleWrapper(AbstractMultiObjectiveEnsemble):
         random_state: int | np.random.RandomState | None,
         backend: Backend,
         ensemble_class: Type[AbstractEnsemble],
-        ensemble_kwargs: Dict,
+        ensemble_kwargs: Dict[str, Any],
         n_weights: int = 100,
         fidelity: int = 10,
     ) -> None:
@@ -140,6 +172,7 @@ class MultiObjectiveEnsembleWrapper(AbstractMultiObjectiveEnsemble):
         base_models_predictions: List[np.ndarray] | np.ndarray,
         true_targets: np.ndarray,
         model_identifiers: List[Tuple[int, int, float]],
+        runs: Sequence[Run],
     ) -> AbstractEnsemble:
         ensembles = []
         losses = []
@@ -151,12 +184,19 @@ class MultiObjectiveEnsembleWrapper(AbstractMultiObjectiveEnsemble):
             random_state=self.random_state,
         )
 
+        scaling_statistics = get_scaling_statistics(runs=runs, metrics=self.metrics)
+
         for weights in all_weights:
-            metric = WeightedMetricScorer(metrics=self.metrics, weights=weights)
+            metric = WeightedMetricScorer(
+                metrics=self.metrics,
+                weights=weights,
+                scaling_statistics=scaling_statistics,
+            )
 
             ensemble = self.ensemble_class(
                 task_type=self.task_type,
                 metrics=metric,
+                backend=self.backend,
                 random_state=self.random_state,
                 **self.ensemble_kwargs,
             )
@@ -164,6 +204,7 @@ class MultiObjectiveEnsembleWrapper(AbstractMultiObjectiveEnsemble):
                 base_models_predictions=base_models_predictions,
                 true_targets=true_targets,
                 model_identifiers=model_identifiers,
+                runs=runs,
             )
             prediction = ensemble.predict(
                 base_models_predictions=base_models_predictions
@@ -267,7 +308,7 @@ class ABLE(AbstractEnsemble):
         random_state: int | np.random.RandomState | None,
         backend: Backend,
         n_samples: int = 100,
-        # TODO add a new regulator to limit the number of different models considered
+        cached: bool = True,
     ) -> None:
         self.task_type = task_type
         if isinstance(metrics, Sequence):
@@ -283,6 +324,7 @@ class ABLE(AbstractEnsemble):
         self.backend = backend
         self.random_state = sklearn.utils.check_random_state(random_state)
         self.n_samples = n_samples
+        self.cached = cached
 
         self._cache_file = os.path.join(
             self.backend.temporary_directory, "able_cache.pkl"
@@ -298,10 +340,14 @@ class ABLE(AbstractEnsemble):
         base_models_predictions: List[np.ndarray],
         true_targets: np.ndarray,
         model_identifiers: List[Tuple[int, int, float]],
+        runs: Sequence[Run],
     ) -> AbstractEnsemble:
         import time
 
         st = time.time()
+
+        if not self.cached:
+            self._cache = dict()
 
         self.n_samples = int(self.n_samples)
         if self.n_samples < 1:
@@ -356,8 +402,9 @@ class ABLE(AbstractEnsemble):
         self.identifiers_ = model_identifiers
         print(self.weights_)
 
-        with open(self._cache_file, "wb") as fh:
-            pickle.dump(self._cache, fh)
+        if self.cached:
+            with open(self._cache_file, "wb") as fh:
+                pickle.dump(self._cache, fh)
 
         et = time.time()
         print(et - st)
@@ -488,6 +535,7 @@ class MultiObjectiveABLE(AbstractMultiObjectiveEnsemble):
         base_models_predictions: List[np.ndarray],
         true_targets: np.ndarray,
         model_identifiers: List[Tuple[int, int, float]],
+        runs: Sequence[Run],
     ) -> AbstractEnsemble:
         import time
 
@@ -498,6 +546,8 @@ class MultiObjectiveABLE(AbstractMultiObjectiveEnsemble):
             raise ValueError("Number of samples cannot be less than one!")
         if self.task_type not in TASK_TYPES:
             raise ValueError("Unknown task type %s." % self.task_type)
+
+        score_statistics = get_scaling_statistics(runs, self.metrics)
 
         num_basemodels = len(base_models_predictions)
         n_datapoints = base_models_predictions[0].shape[0]
@@ -537,10 +587,13 @@ class MultiObjectiveABLE(AbstractMultiObjectiveEnsemble):
                         self._cache[key] = model_scores
                 scores[model_idx, :] = model_scores
             all_scores[metric.name] = scores
-            # TODO: the paper by Knowles, 2005, demands that the scores are scaled to [0,
-            #  1]. For Auto-sklearn we could use the observed best as the maximum and the dummy
-            #  score as the minimum. However, this begs the question on how the dummy score
-            #  should be passed to the Ensemble builder?
+
+        scaled_scores = {}
+        for metric_name in all_scores:
+            scaled_scores[metric_name] = dict()
+            scaled_scores[metric_name] = (
+                all_scores[metric_name].copy() - score_statistics["min"][metric_name]
+            ) / score_statistics["diff"][metric_name]
 
         # Third, iterate all weights and compute the weights and oob predictions (+ oob scores)
         all_weights = []
@@ -555,7 +608,7 @@ class MultiObjectiveABLE(AbstractMultiObjectiveEnsemble):
 
             scores = np.zeros((num_basemodels, self.n_samples))
             for weight, metric in zip(metric_weights, self.metrics):
-                scores += all_scores[metric.name] * weight
+                scores += scaled_scores[metric.name] * weight
 
             model_weights = compute_weights_from_scores(
                 n_samples=self.n_samples,
@@ -742,40 +795,44 @@ import sklearn.datasets
 import sklearn.metrics
 import autosklearn.classification
 
+# X, y = sklearn.datasets.fetch_openml(data_id=1590, return_X_y=True, as_frame=True)
 X, y = sklearn.datasets.fetch_openml(data_id=31, return_X_y=True, as_frame=True)
 # Change the target to align with scikit-learn's convention that
 # ``1`` is the minority class. In this example it is predicting
 # that a credit is "bad", i.e. that it will default.
 y = np.array([1 if val == "bad" else 0 for val in y])
+# y = np.array([1 if val == ">50K" else 0 for val in y])
 X_train, X_test, y_train, y_test = sklearn.model_selection.train_test_split(
     X, y, random_state=1
 )
+print(y_train)
 
 automl = autosklearn.classification.AutoSklearnClassifier(
     time_left_for_this_task=60,
     per_run_time_limit=10,
     tmp_folder="/tmp/autosklearn_classification_example_tmp",
-    # ensemble_class=MultiObjectiveEnsembleWrapper,
-    # ensemble_kwargs={
-    #    'ensemble_class': ABLE,
-    #    'fidelity': 12,
-    #    'ensemble_kwargs': {
-    #        'n_samples': 5,
-    #    },
-    # },
+    metric=[autosklearn.metrics.precision, autosklearn.metrics.recall],
+    ensemble_class=MultiObjectiveEnsembleWrapper,
+    ensemble_kwargs={
+        "ensemble_class": ABLE,
+        "fidelity": 5,
+        "ensemble_kwargs": {
+            "cached": False,
+        },
+    },
     # metric=[autosklearn.metrics.precision, autosklearn.metrics.recall],
     # ensemble_class=MultiObjectiveABLE,
     # ensemble_kwargs={"n_samples": 100, "n_weights": 1000},
-    metric=autosklearn.metrics.roc_auc,
+    # metric=autosklearn.metrics.roc_auc,
     # ensemble_class=ABLE,
     # ensemble_kwargs={"n_samples": 200},
 )
 automl.fit(X_train, y_train, dataset_name="German credit")
 print(automl.leaderboard())
 
-predictions = automl.predict_proba(X_test)[:, 1]
-print("Accuracy score:", sklearn.metrics.roc_auc_score(y_test, predictions))
+# predictions = automl.predict_proba(X_test)[:, 1]
+# print("Accuracy score:", sklearn.metrics.roc_auc_score(y_test, predictions))
 
-# predictions = automl.predict(X_test)
-# print("Precision", sklearn.metrics.precision_score(y_test, predictions))
-# print("Recall", sklearn.metrics.recall_score(y_test, predictions))
+predictions = automl.predict(X_test)
+print("Precision", sklearn.metrics.precision_score(y_test, predictions))
+print("Recall", sklearn.metrics.recall_score(y_test, predictions))

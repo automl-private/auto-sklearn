@@ -686,7 +686,7 @@ def test_fit_ensemble_produces_ensemble(
     predictions = targets
     runs = [make_run(predictions={"ensemble": predictions}) for _ in range(10)]
 
-    ensemble = builder.fit_ensemble(runs, targets)
+    ensemble = builder.fit_ensemble(candidates=runs, targets=targets, runs=runs)
 
     assert ensemble is not None
 
@@ -712,7 +712,7 @@ def test_fit_with_error_gives_no_ensemble(
     runs.append(bad_run)
 
     with pytest.raises(FileNotFoundError):
-        builder.fit_ensemble(runs, targets)
+        builder.fit_ensemble(candidates=runs, targets=targets, runs=runs)
 
 
 @parametrize("time_buffer", [1, 5])

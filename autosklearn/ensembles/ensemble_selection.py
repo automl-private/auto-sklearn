@@ -11,6 +11,7 @@ from sklearn.utils import check_random_state
 
 from autosklearn.automl_common.common.utils.backend import Backend
 from autosklearn.constants import TASK_TYPES
+from autosklearn.ensemble_building.run import Run
 from autosklearn.ensembles.abstract_ensemble import AbstractEnsemble
 from autosklearn.metrics import Scorer, calculate_losses
 from autosklearn.pipeline.base import BasePipeline
@@ -105,6 +106,7 @@ class EnsembleSelection(AbstractEnsemble):
         base_models_predictions: List[np.ndarray],
         true_targets: np.ndarray,
         model_identifiers: List[Tuple[int, int, float]],
+        runs: Sequence[Run],
     ) -> EnsembleSelection:
         self.ensemble_size = int(self.ensemble_size)
         if self.ensemble_size < 1:
