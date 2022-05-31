@@ -59,10 +59,10 @@ def test_no_ensemble(automl: AutoML) -> None:
 
     Expects
     -------
-    * The ensemble should remain None
-    * The models_ should be empty
+    * Auto-sklearn does not load a model
+    * The models_ should be of size 0
     * The cv_models_ should remain None
     """
     assert automl.ensemble_ is None
-    assert automl.models_ == []
-    assert automl.cv_models_ is None
+    assert len(automl.models_) == 0
+    assert len(automl.cv_models_) == 0
