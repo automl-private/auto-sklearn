@@ -11,7 +11,19 @@ from __future__ import annotations
 import itertools
 import os
 import pickle
-from typing import Any, Dict, List, Optional, Sequence, Tuple, Type, Union, cast
+import time
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    List,
+    Optional,
+    Sequence,
+    Tuple,
+    Type,
+    Union,
+    cast,
+)
 import warnings
 
 import numpy as np
@@ -24,6 +36,7 @@ from autosklearn.constants import TASK_TYPES, CLASSIFICATION_TASKS
 from autosklearn.ensemble_building.run import Run
 from autosklearn.ensembles.abstract_ensemble import AbstractEnsemble
 from autosklearn.ensembles.abstract_ensemble import AbstractMultiObjectiveEnsemble
+from autosklearn.ensembles.ensemble_selection import EnsembleSelection
 from autosklearn.metrics import Scorer, calculate_losses
 from autosklearn.pipeline.base import BasePipeline
 
@@ -73,11 +86,12 @@ def is_pareto_efficient(costs: np.ndarray) -> np.ndarray:
     return is_efficient
 
 
-def get_weights(
-    fidelity: int,
+def get_weights_knowles(
     num_metrics: int,
     n_weights: int,
     random_state: np.random.RandomState,
+    *,
+    fidelity: int,
 ) -> np.ndarray:
     # Generating weights according to Equation (1) from Knowles, 2005
     # https://www.cs.bham.ac.uk/~jdk/parego/emo2005parego.pdf
@@ -115,8 +129,36 @@ def get_weights(
     return all_weights
 
 
+def get_weights_iterative(
+    num_metrics: int,
+    n_weights: int,
+    random_state: np.random.RandomState,
+):
+    if num_metrics > 2:
+        raise NotImplementedError()
+    if n_weights < 2:
+        raise NotImplementedError()
+
+    sorted_weights = [(1.0, 0.0), (0.0, 1.0)]
+    weights = set(sorted_weights)
+
+    spacing = 0.5
+    for i in range(0, 4):
+        values = np.arange(0, 0.5 + (spacing / 2), spacing)
+        for alpha in values:
+            for weight in ((alpha, 1 - alpha), (1 - alpha, alpha)):
+                if len(weights) < n_weights and weight not in weights:
+                    sorted_weights.append(weight)
+                    weights.add(weight)
+        spacing = spacing / 2
+
+    sorted_weights = np.array(sorted_weights)
+    return sorted_weights
+
+
 def get_scaling_statistics(
-    runs: Sequence[Run], metrics: Sequence[Scorer]
+    runs: Sequence[Run],
+    metrics: Sequence[Scorer],
 ) -> pd.DataFrame:
     score_statistics = pd.DataFrame(
         index=[metric.name for metric in metrics], columns=["min", "max", "diff"]
@@ -144,8 +186,10 @@ class MultiObjectiveEnsembleWrapper(AbstractMultiObjectiveEnsemble):
         backend: Backend,
         ensemble_class: Type[AbstractEnsemble],
         ensemble_kwargs: Dict[str, Any],
-        n_weights: int = 100,
-        fidelity: int = 10,
+        n_weights: int,
+        time_limit: int | None = None,
+        weighting_function: Callable = get_weights_iterative,
+        weighting_function_kwargs: Dict[str, Any] | None = None,
     ) -> None:
         self.task_type = task_type
         self.metrics = metrics if isinstance(metrics, Sequence) else [metrics]
@@ -153,8 +197,12 @@ class MultiObjectiveEnsembleWrapper(AbstractMultiObjectiveEnsemble):
         self.backend = backend
         self.ensemble_class = ensemble_class
         self.ensemble_kwargs = ensemble_kwargs
+        self.time_limit = time_limit
+        self.weighting_function = weighting_function
         self.n_weights = n_weights
-        self.fidelity = fidelity
+        self.weighting_function_kwargs = (
+            weighting_function_kwargs if weighting_function_kwargs else {}
+        )
 
     def __getstate__(self) -> Dict[str, Any]:
         # Cannot serialize a metric if
@@ -177,16 +225,33 @@ class MultiObjectiveEnsembleWrapper(AbstractMultiObjectiveEnsemble):
         ensembles = []
         losses = []
 
-        all_weights = get_weights(
-            fidelity=self.fidelity,
+        all_weights = self.weighting_function(
             num_metrics=len(self.metrics),
             n_weights=self.n_weights,
             random_state=self.random_state,
+            **self.weighting_function_kwargs,
         )
 
+        start_time = time.time()
+        time_per_ensemble = []
         scaling_statistics = get_scaling_statistics(runs=runs, metrics=self.metrics)
 
         for weights in all_weights:
+
+            # Stop if no time would be left to build more ensemble...
+            if self.time_limit is not None and len(time_per_ensemble) > 0:
+                print(
+                    weights,
+                    time.time() + np.mean(time_per_ensemble) * 2,
+                    start_time + self.time_limit,
+                )
+                if (time.time() + np.mean(time_per_ensemble) * 2) > (
+                    start_time + self.time_limit
+                ):
+                    break
+
+            ensemble_start_time = time.time()
+
             metric = WeightedMetricScorer(
                 metrics=self.metrics,
                 weights=weights,
@@ -219,12 +284,22 @@ class MultiObjectiveEnsembleWrapper(AbstractMultiObjectiveEnsemble):
             )
             ensembles.append(ensemble)
 
+            ensemble_end_time = time.time()
+            time_per_ensemble.append(ensemble_end_time - ensemble_start_time)
+
         # Prune to the Pareto front!
         losses_array = np.array(
             [[losses_[metric.name] for metric in self.metrics] for losses_ in losses]
         )
+        print(losses_array)
         pareto_front = is_pareto_efficient(losses_array)
-        ensembles = [ensembles[i] for i, pareto in enumerate(pareto_front) if pareto]
+        ensembles = [
+            (ensembles[i], losses_array[i])
+            for i, pareto in enumerate(pareto_front)
+            if pareto
+        ]
+        ensembles = sorted(ensembles, key=lambda x: x[1][0])
+        ensembles = [ensemble[0] for ensemble in ensembles]
         self.ensembles_ = ensembles
         return self
 
@@ -511,7 +586,8 @@ class MultiObjectiveABLE(AbstractMultiObjectiveEnsemble):
         n_samples: int = 100,
         # TODO add a new regulator to limit the number of different models considered
         n_weights: int = 100,
-        fidelity: int = 15,
+        weighting_function: Callable = get_weights_iterative,
+        weighting_function_kwargs: Dict[str, Any] | None = None,
     ) -> None:
         self.task_type = task_type
         self.metrics = metrics
@@ -519,7 +595,10 @@ class MultiObjectiveABLE(AbstractMultiObjectiveEnsemble):
         self.backend = backend
         self.n_samples = n_samples
         self.n_weights = n_weights
-        self.fidelity = fidelity
+        self.weighting_function = weighting_function
+        self.weighting_function_kwargs = (
+            weighting_function_kwargs if weighting_function_kwargs is not None else {}
+        )
 
         self._cache_file = os.path.join(
             self.backend.temporary_directory, "able_cache.pkl"
@@ -596,15 +675,17 @@ class MultiObjectiveABLE(AbstractMultiObjectiveEnsemble):
             ) / score_statistics["diff"][metric_name]
 
         # Third, iterate all weights and compute the weights and oob predictions (+ oob scores)
-        all_weights = []
+        all_model_weights = []
         all_ensemble_scores = []
 
-        for metric_weights in get_weights(
-            fidelity=self.fidelity,
+        all_metric_weights = self.weighting_function(
             num_metrics=len(self.metrics),
             n_weights=self.n_weights,
             random_state=self.random_state,
-        ):
+            **self.weighting_function_kwargs,
+        )
+
+        for metric_weights in all_metric_weights:
 
             scores = np.zeros((num_basemodels, self.n_samples))
             for weight, metric in zip(metric_weights, self.metrics):
@@ -664,12 +745,19 @@ class MultiObjectiveABLE(AbstractMultiObjectiveEnsemble):
             for weight, metric in zip(metric_weights, self.metrics):
                 scores.append(metric(y_true=true_targets, y_pred=ensemble_predictions))
 
-            all_weights.append(model_weights)
+            all_model_weights.append(model_weights)
             all_ensemble_scores.append(scores)
 
         # Fourth: compute the pareto front based on the OOB scores
         pareto_front = is_pareto_efficient(np.array(all_ensemble_scores))
-        ensembles = [all_weights[i] for i, pareto in enumerate(pareto_front) if pareto]
+        ensembles = [
+            (all_model_weights[i], all_ensemble_scores[i])
+            for i, pareto in enumerate(pareto_front)
+            if pareto
+        ]
+        ensembles = sorted(ensembles, key=lambda x: x[1][0])
+        ensembles = [ensemble[0] for ensemble in ensembles]
+
         self.ensembles_ = ensembles
 
         self.weights_ = self.ensembles_[0]
@@ -795,39 +883,66 @@ import sklearn.datasets
 import sklearn.metrics
 import autosklearn.classification
 
-# X, y = sklearn.datasets.fetch_openml(data_id=1590, return_X_y=True, as_frame=True)
-X, y = sklearn.datasets.fetch_openml(data_id=31, return_X_y=True, as_frame=True)
+# German credit
+# X, y = sklearn.datasets.fetch_openml(data_id=31, return_X_y=True, as_frame=True)
 # Change the target to align with scikit-learn's convention that
 # ``1`` is the minority class. In this example it is predicting
 # that a credit is "bad", i.e. that it will default.
-y = np.array([1 if val == "bad" else 0 for val in y])
-# y = np.array([1 if val == ">50K" else 0 for val in y])
+# y = np.array([1 if val == "bad" else 0 for val in y])
+
+# Adult
+X, y = sklearn.datasets.fetch_openml(data_id=1590, return_X_y=True, as_frame=True)
+y = np.array([1 if val == ">50K" else 0 for val in y])
+
 X_train, X_test, y_train, y_test = sklearn.model_selection.train_test_split(
     X, y, random_state=1
 )
-print(y_train)
+# print(y_train)
+#
+# automl = autosklearn.classification.AutoSklearnClassifier(
+#     time_left_for_this_task=60,
+#     per_run_time_limit=10,
+#     tmp_folder="/tmp/autosklearn_classification_example_tmp",
+#     # metric=[autosklearn.metrics.precision, autosklearn.metrics.recall],
+#     # ensemble_class=MultiObjectiveEnsembleWrapper,
+#     # ensemble_kwargs={
+#     #     "ensemble_class": ABLE,
+#     #     "n_weights": 10,
+#     #     "ensemble_kwargs": {
+#     #         "cached": False,
+#     #     },
+#     # },
+#     metric=[autosklearn.metrics.precision, autosklearn.metrics.recall],
+#     ensemble_class=MultiObjectiveABLE,
+#     ensemble_kwargs={"n_samples": 200, "n_weights": 10000},
+#     # metric=autosklearn.metrics.roc_auc,
+#     # ensemble_class=ABLE,
+#     # ensemble_kwargs={"n_samples": 200},
+# )
+# automl.fit(X_train, y_train, dataset_name="German credit")
 
 automl = autosklearn.classification.AutoSklearnClassifier(
-    time_left_for_this_task=60,
-    per_run_time_limit=10,
+    time_left_for_this_task=int(3600 * 0.9),
+    # per_run_time_limit=10,
     tmp_folder="/tmp/autosklearn_classification_example_tmp",
     metric=[autosklearn.metrics.precision, autosklearn.metrics.recall],
-    ensemble_class=MultiObjectiveEnsembleWrapper,
-    ensemble_kwargs={
-        "ensemble_class": ABLE,
-        "fidelity": 5,
-        "ensemble_kwargs": {
-            "cached": False,
-        },
-    },
-    # metric=[autosklearn.metrics.precision, autosklearn.metrics.recall],
-    # ensemble_class=MultiObjectiveABLE,
-    # ensemble_kwargs={"n_samples": 100, "n_weights": 1000},
-    # metric=autosklearn.metrics.roc_auc,
-    # ensemble_class=ABLE,
-    # ensemble_kwargs={"n_samples": 200},
+    ensemble_class=None,
+    delete_tmp_folder_after_terminate=False,
 )
 automl.fit(X_train, y_train, dataset_name="German credit")
+automl.fit_ensemble(
+    y_train,
+    ensemble_class=MultiObjectiveEnsembleWrapper,
+    ensemble_kwargs={
+        "n_weights": 1000,
+        "time_limit": int(3600 * 0.1),
+        "ensemble_class": EnsembleSelection,
+        "ensemble_kwargs": {
+            "ensemble_size": 50,
+        },
+    },
+)
+
 print(automl.leaderboard())
 
 # predictions = automl.predict_proba(X_test)[:, 1]

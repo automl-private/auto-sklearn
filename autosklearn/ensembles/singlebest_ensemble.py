@@ -69,7 +69,6 @@ class SingleBest(AbstractEnsemble):
 
         for run_key in self.run_history.data.keys():
             run_value = self.run_history.data[run_key]
-            print(run_key, run_value)
             if len(self.metrics) == 1:
                 cost = run_value.cost
             else:
